@@ -1,0 +1,23 @@
+appId: org.oneclicktomap.app
+productName: OneClickToMap
+copyright: © OneClickToMap contributors — MIT
+directories:
+  output: release
+  buildResources: build
+# Icônes attendues dans build/ avant distribution :
+#   build/icon.ico (Windows), build/icon.icns (macOS), build/icon.png 512² (Linux).
+files:
+  - dist/**/*
+  - dist-electron/**/*
+win:
+  target: nsis
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target: dmg
+  category: public.app-category.graphics-design
+linux:
+  target: AppImage
+  category: Graphics
