@@ -64,6 +64,8 @@ export interface OutputLayer {
     gravity: number;
     color: [number, number, number];
   };
+  /** Repositionnement du contenu dans la surface (offset uv, échelle, rotation). */
+  transform?: { offsetX: number; offsetY: number; scale: number; rotation: number };
 }
 
 /** État de déformation d'une surface, synchronisé éditeur -> sortie (géométrie + styles). */

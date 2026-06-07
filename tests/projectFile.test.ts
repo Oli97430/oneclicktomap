@@ -99,6 +99,40 @@ describe('projectFile', () => {
     });
   });
 
+  it('préserve la transformation de calque dans un aller-retour', () => {
+    const withTransform: Project = {
+      ...project,
+      surfaces: [
+        {
+          ...project.surfaces[0],
+          layers: [
+            {
+              id: 'l1',
+              name: 'Image',
+              source: { kind: 'image', dataUrl: 'data:,' },
+              blendMode: 'normal',
+              opacity: 1,
+              visible: true,
+              transform: { offsetX: 0.1, offsetY: -0.2, scale: 1.5, rotation: 0.4 },
+            },
+          ],
+        },
+      ],
+    };
+    const file = serializeProject({
+      project: withTransform,
+      scenes: [],
+      settings: { bpm: 120, loop: true },
+    });
+    const parsed = parseProjectFile(projectFileToJson(file));
+    expect(parsed.project.surfaces[0].layers[0].transform).toEqual({
+      offsetX: 0.1,
+      offsetY: -0.2,
+      scale: 1.5,
+      rotation: 0.4,
+    });
+  });
+
   it('borne le BPM au chargement et rejette les versions ≤ 0', () => {
     const high = parseProjectFile(
       JSON.stringify({ format: 'oneclicktomap', version: 1, project, settings: { bpm: 9000 } }),

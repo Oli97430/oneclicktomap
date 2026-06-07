@@ -8,9 +8,10 @@ import { ParticleTexture } from './ParticleTexture';
 import type { DynamicTexture } from './DynamicTexture';
 import type { WarpObject } from './WarpObject';
 import { getAudioFeatures } from '@/content/audioBus';
-import type { BlendMode, ParticleParams, Vec2, WarpMode } from '@/types';
+import type { BlendMode, LayerTransform, ParticleParams, Vec2, WarpMode } from '@/types';
 import type { GridSize } from '@/utils/warp';
 import { NO_BLEND, type EdgeBlend } from '@/utils/edgeBlend';
+import { LAYER_TRANSFORM_IDENTITY } from '@/utils/layerTransform';
 
 export interface StageLayer {
   id: string;
@@ -22,6 +23,8 @@ export interface StageLayer {
   shaderCode?: string;
   /** Pour particles : paramètres du système de particules. */
   particles?: ParticleParams;
+  /** Repositionnement du contenu dans la surface (absent = identité). */
+  transform?: LayerTransform;
 }
 
 export interface StageMask {
@@ -141,6 +144,7 @@ export class Stage {
         obj.setMask(mask.texture, mask.enabled);
         obj.setStyle(layer.opacity, layer.blendMode);
         obj.setBlend(surface.blend ?? NO_BLEND);
+        obj.setTransform(layer.transform ?? LAYER_TRANSFORM_IDENTITY, this.renderer.aspect);
         obj.setVisible(layer.visible);
         obj.setRenderOrder(surfaceIndex * 1000 + i);
         obj.setOutlineVisible(i === 0 && this.showOutlines && surface.id === selectedId);
@@ -256,9 +260,14 @@ export class Stage {
 
   private applyCorners(): void {
     this.surfaces.forEach((surface) => {
-      this.entries
-        .get(surface.id)
-        ?.objs.forEach((o) => o.setCorners(surface.controlPoints, this.renderer.aspect));
+      this.entries.get(surface.id)?.objs.forEach((o, i) => {
+        o.setCorners(surface.controlPoints, this.renderer.aspect);
+        // L'aspect intervient dans la correction de rotation : ré-appliquer au resize.
+        o.setTransform(
+          surface.layers[i]?.transform ?? LAYER_TRANSFORM_IDENTITY,
+          this.renderer.aspect,
+        );
+      });
     });
   }
 

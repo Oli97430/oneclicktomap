@@ -46,6 +46,20 @@ export interface MediaItem {
   dataUrl: string;
 }
 
+/**
+ * Repositionnement du contenu d'un calque DANS sa surface (indépendant du warp).
+ * - offsetX/offsetY : décalage du centre du contenu, en fraction de la surface
+ *   (espace uv ; +x vers la droite, +y vers le haut). 0 = centré.
+ * - scale : échelle uniforme du contenu. 1 = remplit la surface.
+ * - rotation : rotation du contenu en radians (corrigée par l'aspect au rendu).
+ */
+export interface LayerTransform {
+  offsetX: number;
+  offsetY: number;
+  scale: number;
+  rotation: number;
+}
+
 export interface Layer {
   id: string;
   name: string;
@@ -53,6 +67,8 @@ export interface Layer {
   blendMode: BlendMode;
   opacity: number;
   visible: boolean;
+  /** Transformation spatiale du contenu dans la surface (absent = identité). */
+  transform?: LayerTransform;
 }
 
 export interface BlendZone {

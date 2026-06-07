@@ -23,6 +23,7 @@ function toOutputSurfaces(surfaces: Surface[]): OutputSurfaceState[] {
         visible: l.visible,
         deviceId: l.source.deviceId,
         particles: l.source.particles,
+        transform: l.transform,
       })),
       mask: s.mask ? { enabled: s.mask.enabled, points: s.mask.points } : undefined,
       blend: blendZonesToEdgeBlend(s.blendZones),

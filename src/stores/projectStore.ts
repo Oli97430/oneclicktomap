@@ -4,6 +4,7 @@ import type {
   BlendZone,
   Layer,
   LayerSource,
+  LayerTransform,
   MaskPath,
   ParticleParams,
   Project,
@@ -213,6 +214,12 @@ interface ProjectStore extends HistoryState, SelectionState {
   moveLayer: (surfaceId: string, layerId: string, direction: 1 | -1) => void;
   setLayerBlend: (surfaceId: string, layerId: string, blendMode: BlendMode) => void;
   setLayerOpacityTransient: (surfaceId: string, layerId: string, opacity: number) => void;
+  setLayerTransformTransient: (
+    surfaceId: string,
+    layerId: string,
+    transform: LayerTransform,
+  ) => void;
+  nudgeLayerTransform: (surfaceId: string, layerId: string, transform: LayerTransform) => void;
   toggleLayerVisible: (surfaceId: string, layerId: string) => void;
   setLayerShaderCode: (surfaceId: string, layerId: string, code: string) => void;
   setLayerParticlesTransient: (surfaceId: string, layerId: string, params: ParticleParams) => void;
@@ -439,6 +446,22 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   setLayerOpacityTransient: (surfaceId, layerId, opacity) =>
     set((s) => ({ project: mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, opacity })) })),
+
+  // Repositionnement du contenu : transitoire pendant le glisser (commit au
+  // relâchement via beginDrag/endDrag).
+  setLayerTransformTransient: (surfaceId, layerId, transform) =>
+    set((s) => ({
+      project: mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, transform })),
+    })),
+
+  // Clavier : une étape d'historique par appui.
+  nudgeLayerTransform: (surfaceId, layerId, transform) =>
+    set((s) =>
+      commitState(
+        s,
+        mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, transform })),
+      ),
+    ),
 
   toggleLayerVisible: (surfaceId, layerId) =>
     set((s) =>

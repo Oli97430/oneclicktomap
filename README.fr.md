@@ -3,7 +3,7 @@
 > Logiciel open-source de projection mapping — Licence MIT
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.4.0-blue.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-0.4.1-blue.svg)](package.json)
 [![Electron](https://img.shields.io/badge/Electron-30-47848F?logo=electron)](https://www.electronjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript)](https://www.typescriptlang.org/)
 [![Three.js](https://img.shields.io/badge/Three.js-WebGL2-black?logo=threedotjs)](https://threejs.org/)
@@ -16,21 +16,21 @@
 
 ## ✨ Fonctionnalités
 
-| Catégorie | Fonctionnalités |
-|---|---|
-| **Déformation (warp)** | Quad 4 coins (perspective), Grille N×M (mesh warp), Masques Bézier (clipping GPU) |
-| **Calques** | Calques illimités par surface, modes de fusion (Normal/Add/Multiply/Screen), opacité |
-| **Médias** | Images (PNG/JPG/WebP), vidéos (MP4/WebM), webcam en direct |
-| **Génératif** | 10+ presets de shaders GLSL, éditeur live avec validation, système de particules GPU |
-| **Audio** | Capture micro/ligne, analyse FFT (basses/médiums/aigus), détection de beats, bindings shaders |
-| **Détection** | Détection de surface par caméra (Canny + Hough), motifs Gray-code (lumière structurée), heuristique de profondeur, auto-mapping |
-| **Timeline** | Instantanés de scènes, durées hold/transition, types coupe/fondu/morph, boucle |
-| **Cue list** | Bouton GO (mode live), navigation préc./suiv., pastilles directes, mode performance |
-| **Sync BPM** | Tap tempo, alignement des durées sur le battement, quantification BPM |
-| **Multi-sortie** | Jusqu'à 4 index de sortie, une fenêtre plein écran par écran, affectation surface → sortie |
-| **Edge blending** | Zones de fondu par bord avec taille + gamma (shader GPU), miroir TS testé |
-| **Sauvegarde** | Fichiers `.oneclicktomap` (JSON versionné), dialogues natifs OS |
-| **Clavier** | Tout est pilotable au clavier — voir tableau des raccourcis |
+| Catégorie              | Fonctionnalités                                                                                                                             |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Déformation (warp)** | Quad 4 coins (perspective), Grille N×M (mesh warp), Masques Bézier (clipping GPU)                                                           |
+| **Calques**            | Calques illimités par surface, modes de fusion (Normal/Add/Multiply/Screen), opacité, transform par calque (gizmo déplacer/pivoter/échelle) |
+| **Médias**             | Images (PNG/JPG/WebP), vidéos (MP4/WebM), webcam en direct                                                                                  |
+| **Génératif**          | 10+ presets de shaders GLSL, éditeur live avec validation, système de particules GPU                                                        |
+| **Audio**              | Capture micro/ligne, analyse FFT (basses/médiums/aigus), détection de beats, bindings shaders                                               |
+| **Détection**          | Détection de surface par caméra (Canny + Hough), motifs Gray-code (lumière structurée), heuristique de profondeur, auto-mapping             |
+| **Timeline**           | Instantanés de scènes, durées hold/transition, types coupe/fondu/morph, boucle                                                              |
+| **Cue list**           | Bouton GO (mode live), navigation préc./suiv., pastilles directes, mode performance                                                         |
+| **Sync BPM**           | Tap tempo, alignement des durées sur le battement, quantification BPM                                                                       |
+| **Multi-sortie**       | Jusqu'à 4 index de sortie, une fenêtre plein écran par écran, affectation surface → sortie                                                  |
+| **Edge blending**      | Zones de fondu par bord avec taille + gamma (shader GPU), miroir TS testé                                                                   |
+| **Sauvegarde**         | Fichiers `.oneclicktomap` (JSON versionné), dialogues natifs OS                                                                             |
+| **Clavier**            | Tout est pilotable au clavier — voir tableau des raccourcis                                                                                 |
 
 ---
 
@@ -74,31 +74,31 @@ Les installateurs sont générés dans `release/`. Fournissez les icônes avant 
 
 ## 📋 Référence des commandes
 
-| Commande | Description |
-|---|---|
-| `npm run dev` | Mode développement (Electron + Vite HMR) |
-| `npm run build` | Vérification TypeScript + bundle de production |
-| `npm run dist` | Build + installateur (NSIS / DMG / AppImage) |
-| `npm run test` | Tests unitaires (Vitest) — 98 tests |
-| `npm run test:e2e` | Tests E2E (Playwright + Electron) — 13 tests |
-| `npm run lint` | ESLint + vérification Prettier |
-| `npm run format` | Formatage automatique Prettier |
+| Commande           | Description                                    |
+| ------------------ | ---------------------------------------------- |
+| `npm run dev`      | Mode développement (Electron + Vite HMR)       |
+| `npm run build`    | Vérification TypeScript + bundle de production |
+| `npm run dist`     | Build + installateur (NSIS / DMG / AppImage)   |
+| `npm run test`     | Tests unitaires (Vitest) — 111 tests           |
+| `npm run test:e2e` | Tests E2E (Playwright + Electron) — 14 tests   |
+| `npm run lint`     | ESLint + vérification Prettier                 |
+| `npm run format`   | Formatage automatique Prettier                 |
 
 ---
 
 ## 🎯 Raccourcis clavier
 
-| Touche | Action |
-|---|---|
-| `Ctrl+Z` / `Ctrl+Y` | Annuler / Rétablir |
-| `Ctrl+S` / `Ctrl+O` | Enregistrer / Ouvrir un projet |
-| `Espace` | Lecture / Pause de la timeline |
-| `←` / `→` | Cue précédent / suivant |
-| `1` – `9` | Aller à la scène N |
-| `T` | Tap tempo |
-| `F` | Mode performance |
-| `Échap` | Quitter le mode performance |
-| Flèches | Déplacer le point de contrôle sélectionné |
+| Touche              | Action                                    |
+| ------------------- | ----------------------------------------- |
+| `Ctrl+Z` / `Ctrl+Y` | Annuler / Rétablir                        |
+| `Ctrl+S` / `Ctrl+O` | Enregistrer / Ouvrir un projet            |
+| `Espace`            | Lecture / Pause de la timeline            |
+| `←` / `→`           | Cue précédent / suivant                   |
+| `1` – `9`           | Aller à la scène N                        |
+| `T`                 | Tap tempo                                 |
+| `F`                 | Mode performance                          |
+| `Échap`             | Quitter le mode performance               |
+| Flèches             | Déplacer le point de contrôle sélectionné |
 
 ---
 
@@ -117,6 +117,7 @@ Dans le panneau **Surfaces**, cliquez **+ Surface**. Une surface quad apparaît 
 ### 3. Détecter la surface automatiquement
 
 Panneau **Détection de surface** :
+
 1. **Activer la caméra** → choisissez votre caméra
 2. **Détecter** → un quadrilatère est proposé (vert)
 3. **+ Surface (quad)** → la surface est alignée sur la détection
@@ -124,6 +125,7 @@ Panneau **Détection de surface** :
 ### 4. Créer une timeline
 
 Panneau **Timeline & scènes** :
+
 1. Configurez vos surfaces, puis **Capturer la scène**
 2. Modifiez, recapturez → répétez pour chaque scène
 3. **▶** pour lire la timeline, **⟳** pour boucler
@@ -131,6 +133,7 @@ Panneau **Timeline & scènes** :
 ### 5. Sortie projecteur
 
 Barre d'outils → **Ouvrir la sortie** :
+
 1. Sélectionnez l'**écran** cible
 2. Choisissez l'**index de sortie** (S1…S4)
 3. **Ouvrir** → fenêtre plein écran sur le projecteur
@@ -209,11 +212,12 @@ tests-e2e/                  ← Tests E2E Playwright (Electron)
 ## 🧪 Qualité & tests
 
 ```bash
-npm run test          # 98 tests unitaires
-npm run test:e2e      # 13 tests E2E (nécessite un build Electron)
+npm run test          # 111 tests unitaires
+npm run test:e2e      # 14 tests E2E (nécessite un build Electron)
 ```
 
 Couverture principale :
+
 - **Vision par ordinateur** : homographie DLT (6 tests), Canny/NMS/hystérésis (10 tests), Hough (3 tests), Gray-code (5 tests), détection de surface (2 tests)
 - **Timeline** : machine d'état des scènes (7), interpolation de transitions (6), scene store (9), utilitaires BPM (5)
 - **I/O** : aller-retour fichier projet, validation, borne BPM, vérification de version (9)
@@ -225,16 +229,16 @@ Chaque phase a été soumise à une **revue adversariale multi-agents** (3 scept
 
 ## 🛣️ Roadmap V1 — complète
 
-| Phase | Description | Statut |
-|---|---|---|
-| 1 | Fondations : Electron + Vite + React + TS, renderer, quad warp, image, sortie plein écran | ✅ |
-| 2 | Warping avancé : grille N×M, masques Bézier, multi-surfaces, calques, undo/redo | ✅ |
-| 3 | Médias : lecteur vidéo, source webcam, bibliothèque de médias | ✅ |
-| 4 | Contenu génératif : runtime GLSL, 10+ presets, éditeur live, système de particules | ✅ |
-| 5 | Audio-réactif : analyse FFT, détection de beats, bindings shaders + particules | ✅ |
-| 6 | Détection de surface : capture caméra, Canny+Hough, Gray-code, auto-mapping, profondeur | ✅ |
-| 7 | Timeline & performance : scènes, transitions, cue list, sync BPM, mode performance | ✅ |
-| 8 | Polish : sauvegarde/chargement, edge blending, multi-projecteurs, guide utilisateur, packaging | ✅ |
+| Phase | Description                                                                                    | Statut |
+| ----- | ---------------------------------------------------------------------------------------------- | ------ |
+| 1     | Fondations : Electron + Vite + React + TS, renderer, quad warp, image, sortie plein écran      | ✅     |
+| 2     | Warping avancé : grille N×M, masques Bézier, multi-surfaces, calques, undo/redo                | ✅     |
+| 3     | Médias : lecteur vidéo, source webcam, bibliothèque de médias                                  | ✅     |
+| 4     | Contenu génératif : runtime GLSL, 10+ presets, éditeur live, système de particules             | ✅     |
+| 5     | Audio-réactif : analyse FFT, détection de beats, bindings shaders + particules                 | ✅     |
+| 6     | Détection de surface : capture caméra, Canny+Hough, Gray-code, auto-mapping, profondeur        | ✅     |
+| 7     | Timeline & performance : scènes, transitions, cue list, sync BPM, mode performance             | ✅     |
+| 8     | Polish : sauvegarde/chargement, edge blending, multi-projecteurs, guide utilisateur, packaging | ✅     |
 
 ---
 

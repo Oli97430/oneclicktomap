@@ -1160,6 +1160,73 @@ body {
   outline-offset: 3px;
 }
 
+/* Layer transform gizmo (repositionnement du contenu d'un calque) */
+.lt-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.lt-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.lt-lines line {
+  stroke: #fb923c;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+
+.lt-knob {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 2px solid #0a0e16;
+  background: #fb923c;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.lt-knob:hover {
+  background: #fdba74;
+}
+
+.lt-knob:active {
+  cursor: grabbing;
+}
+
+.lt-knob:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 3px;
+}
+
+.lt-move {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: radial-gradient(circle at center, #0a0e16 0 2px, transparent 3px), #fb923c;
+  cursor: move;
+}
+
+.lt-rot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+}
+
+.lt-scale {
+  width: 15px;
+  height: 15px;
+  border-radius: 3px;
+  cursor: nwse-resize;
+}
+
 /* Output (projector) controls */
 .output-controls {
   display: flex;

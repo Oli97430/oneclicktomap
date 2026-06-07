@@ -43,6 +43,12 @@ Chaque surface empile des **calques** (panneau « Calques ») avec mode de fusio
 - **Webcam** : ajoutez un calque webcam (autorisation caméra requise).
 - **Génératif** : shaders GLSL (voir §4).
 
+**Repositionner le contenu d'un calque** : le calque sélectionné affiche un gizmo
+ambre au centre de la surface. Glissez la **pastille centrale** pour déplacer,
+la **poignée haute** pour pivoter, la **poignée d'angle** pour mettre à l'échelle.
+Double-clic sur le centre = réinitialiser. Au clavier (poignée ciblée) : flèches
+(Maj = pas large). C'est indépendant de la déformation (warp) de la surface.
+
 ---
 
 ## 4. Contenu génératif

@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { BlendMode, Vec2 } from '@/types';
+import type { BlendMode, LayerTransform, Vec2 } from '@/types';
 import type { EdgeBlend } from '@/utils/edgeBlend';
 
 /**
@@ -14,6 +14,8 @@ export interface WarpObject {
   setMask(texture: THREE.Texture, enabled: boolean): void;
   setStyle(opacity: number, blendMode: BlendMode): void;
   setBlend(blend: EdgeBlend): void;
+  /** Repositionne le contenu du calque dans la surface. @param aspect surface w/h. */
+  setTransform(transform: LayerTransform, aspect: number): void;
   setVisible(visible: boolean): void;
   setOutlineVisible(visible: boolean): void;
   setRenderOrder(order: number): void;

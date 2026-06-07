@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import gridVertexShader from './shaders/grid.vert.glsl';
 import warpFragmentShader from './shaders/warp.frag.glsl';
-import type { BlendMode, Vec2 } from '@/types';
+import type { BlendMode, LayerTransform, Vec2 } from '@/types';
 import type { GridSize } from '@/utils/warp';
 import type { EdgeBlend } from '@/utils/edgeBlend';
 import { applyBlend } from './blend';
@@ -69,6 +69,10 @@ export class WarpGrid implements WarpObject {
         uBlendIdentity: { value: new THREE.Color(0, 0, 0) },
         uBlendSize: { value: new THREE.Vector4(0, 0, 0, 0) },
         uBlendGamma: { value: new THREE.Vector4(1, 1, 1, 1) },
+        uLayerOffset: { value: new THREE.Vector2(0, 0) },
+        uLayerScale: { value: 1 },
+        uLayerRot: { value: 0 },
+        uLayerAspect: { value: 1 },
       },
       side: THREE.DoubleSide,
       transparent: true,
@@ -133,6 +137,16 @@ export class WarpGrid implements WarpObject {
   setBlend(blend: EdgeBlend): void {
     (this.material.uniforms.uBlendSize.value as THREE.Vector4).set(...blend.size);
     (this.material.uniforms.uBlendGamma.value as THREE.Vector4).set(...blend.gamma);
+  }
+
+  setTransform(transform: LayerTransform, aspect: number): void {
+    (this.material.uniforms.uLayerOffset.value as THREE.Vector2).set(
+      transform.offsetX,
+      transform.offsetY,
+    );
+    this.material.uniforms.uLayerScale.value = transform.scale;
+    this.material.uniforms.uLayerRot.value = transform.rotation;
+    this.material.uniforms.uLayerAspect.value = aspect;
   }
 
   setVisible(visible: boolean): void {

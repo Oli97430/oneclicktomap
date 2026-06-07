@@ -8,6 +8,7 @@ import { blendZonesToEdgeBlend } from '@/utils/edgeBlend';
 import type { Surface } from '@/types';
 import { ControlPointsOverlay } from './ControlPointsOverlay';
 import { MaskOverlay } from './MaskOverlay';
+import { LayerTransformOverlay } from './LayerTransformOverlay';
 
 function toStageSurfaces(surfaces: Surface[]): StageSurface[] {
   return surfaces
@@ -25,6 +26,7 @@ function toStageSurfaces(surfaces: Surface[]): StageSurface[] {
         visible: l.visible,
         shaderCode: l.source.shaderCode,
         particles: l.source.particles,
+        transform: l.transform,
       })),
       mask: s.mask ? { enabled: s.mask.enabled, points: s.mask.points } : undefined,
       blend: blendZonesToEdgeBlend(s.blendZones),
@@ -126,6 +128,7 @@ export function StageCanvas() {
       >
         <canvas ref={canvasRef} className="stage-canvas" />
         <ControlPointsOverlay />
+        <LayerTransformOverlay />
         <MaskOverlay />
       </div>
     </div>

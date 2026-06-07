@@ -40,6 +40,7 @@ function toStageSurfaces(list: OutputSurfaceState[], assets: OutputAssets): Stag
         // Le code des shaders génératifs arrive par le canal assets (rare).
         shaderCode: l.kind === 'generative' ? assets[l.id] : undefined,
         particles: l.particles,
+        transform: l.transform,
       })),
       mask: o.mask,
       blend: toEdgeBlend(o.blend),

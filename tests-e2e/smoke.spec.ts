@@ -238,3 +238,23 @@ test('polish : sauvegarde, edge blending et multi-sorties (UI)', async () => {
 
   await app.close();
 });
+
+test('repositionnement de calque : gizmo (déplacer / pivoter / échelle) + clavier', async () => {
+  const app: ElectronApplication = await electron.launch({ args: [MAIN] });
+  const editor = await app.firstWindow();
+  await editor.locator('.layer-row').first().waitFor();
+
+  // Les trois poignées du gizmo du calque sélectionné sont présentes.
+  await editor.locator('.lt-move').waitFor();
+  await expect(editor.locator('.lt-move')).toHaveCount(1);
+  await expect(editor.locator('.lt-rot')).toHaveCount(1);
+  await expect(editor.locator('.lt-scale')).toHaveCount(1);
+
+  // Nudge clavier (déplacement) : ne casse rien et garde la poignée présente.
+  await editor.locator('.lt-move').focus();
+  await editor.keyboard.press('ArrowRight');
+  await editor.keyboard.press('ArrowUp');
+  await expect(editor.locator('.lt-move')).toBeVisible();
+
+  await app.close();
+});
