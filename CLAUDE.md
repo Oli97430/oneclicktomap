@@ -141,6 +141,23 @@ installateurs (config présente, exécution per-OS) → cœurs purs testés + UI
 
 🎉 Roadmap V1 (Phases 1–8) complète.
 
+Phase 9 — Améliorations (v0.5.0) : **terminée ✅**
+38. ✅ Multi-sélection surfaces (A1) — Shift-clic, deleteSelectedSurfaces
+39. ✅ Drag & drop fichiers sur canvas (A2) — image/vidéo → calque direct
+40. ✅ Fichiers récents (A3) — dropdown toolbar, persisté dans userData JSON
+41. ✅ 4 nouveaux blend modes (A4) — overlay/softlight/difference/colordodge (GLSL+WebGL)
+42. ✅ Capture vidéo WebM (A5) — MediaRecorder + canvas.captureStream + dialogue natif
+43. ✅ Screenshot PNG (A6) — canvas.toDataURL + dialogue natif (captureBus)
+44. ✅ Panneau historique undo (A7) — labels sur toutes les actions (pastLabels/futureLabels)
+45. ✅ Raccourcis personnalisables (A8) — shortcutsStore + localStorage + ShortcutsPanel
+46. ✅ Calque texte CanvasTexture (C4) — TextControls, rendu OffscreenCanvas 1024×256
+47. ✅ Calque flux HLS/RTSP (C6) — video HLS natif Electron, saisie URL dans LayersPanel
+48. ✅ Paramètres shader exposés (D2) — ShaderParamDef, parseShaderParams, sliders UI
+49. ✅ 8 nouveaux presets shaders (D5) — glitch, kaléidoscope, feu, pluie, lissajous, déplacement, hex, résonance
+50. ✅ Calibration caméra-projecteur (E1) — boucle Gray-code → broadcast sortie, surcouche OutputView
+51. ✅ Timecode SMPTE (F1) — MTC (Web MIDI) + LTC (AudioWorklet biphase-mark) + sync timeline
+52. ✅ Chargement progressif vidéos (G2) — LoadingState dans MediaTextureCache, badge UI
+
 ## Référence
 
 Voir `OneClickToMap-SPEC.md` pour les spécifications complètes, le modèle de données détaillé, et la roadmap.

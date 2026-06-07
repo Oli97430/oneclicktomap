@@ -14,9 +14,25 @@ export interface Vec3 {
 
 export type WarpMode = 'quad' | 'grid' | 'mesh';
 
-export type BlendMode = 'normal' | 'add' | 'multiply' | 'screen';
+export type BlendMode =
+  | 'normal'
+  | 'add'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'softlight'
+  | 'difference'
+  | 'colordodge';
 
-export type LayerSourceKind = 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles';
+export type LayerSourceKind =
+  | 'pattern'
+  | 'image'
+  | 'video'
+  | 'webcam'
+  | 'generative'
+  | 'particles'
+  | 'text'
+  | 'stream';
 
 export interface ParticleParams {
   count: number;
@@ -24,6 +40,20 @@ export interface ParticleParams {
   size: number;
   gravity: number;
   color: [number, number, number];
+}
+
+/** Paramètres d'un calque texte rendu sur CanvasTexture. */
+export interface TextParams {
+  content: string;
+  fontFamily: string;
+  fontSize: number;
+  color: string;
+  background: string;
+  align: 'left' | 'center' | 'right';
+  bold: boolean;
+  italic: boolean;
+  /** Vitesse de défilement horizontal (unités/s dans l'espace texte, 0 = statique). */
+  scrollSpeed: number;
 }
 
 export interface LayerSource {
@@ -36,6 +66,12 @@ export interface LayerSource {
   shaderCode?: string;
   /** Pour particles : paramètres du système de particules. */
   particles?: ParticleParams;
+  /** Pour text : paramètres de rendu textuel. */
+  textParams?: TextParams;
+  /** Pour stream : URL HLS/WebRTC (ex. https://…/stream.m3u8). */
+  streamUrl?: string;
+  /** Pour generative : valeurs des uniforms exposés (uP_*). */
+  shaderParams?: Record<string, number>;
 }
 
 /** Élément de la bibliothèque de médias (palette d'import). */

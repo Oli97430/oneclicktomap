@@ -1,17 +1,21 @@
 import { useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useSceneStore } from '@/stores/sceneStore';
+import { useShortcutsStore, matchesShortcut } from '@/stores/shortcutsStore';
 import { openProjectFromFile, saveProjectToFile } from '@/io/projectActions';
 
 /**
- * Raccourcis globaux.
- * - Édition : Ctrl/Cmd+Z (annuler), Ctrl/Cmd+Shift+Z ou Ctrl+Y (rétablir).
- * - Live : Espace (lecture/pause), ←/→ (cue préc./suiv.), 1-9 (aller à la scène),
- *   T (tap tempo), F (mode performance), Échap (quitter le mode performance).
+ * Raccourcis globaux — A8 : les touches sont lues depuis shortcutsStore
+ * (personnalisables) au lieu d'etre codees en dur.
+ *
+ * Raccourcis non personnalisables (traites avant le store) :
+ *   - Chiffres 1-9 : aller a la scene
+ *   - Echap : quitter le mode performance
  */
 export function useKeyboardShortcuts(): void {
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
+  const shortcuts = useShortcutsStore((s) => s.shortcuts);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -19,57 +23,78 @@ export function useKeyboardShortcuts(): void {
       const isFormField =
         tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON';
 
-      // Annuler / rétablir (modificateur requis).
-      if (event.ctrlKey || event.metaKey) {
-        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-        const key = event.key.toLowerCase();
-        if (key === 'z' && !event.shiftKey) {
-          event.preventDefault();
-          undo();
-        } else if ((key === 'z' && event.shiftKey) || key === 'y') {
-          event.preventDefault();
-          redo();
-        } else if (key === 's') {
-          event.preventDefault();
-          void saveProjectToFile();
-        } else if (key === 'o') {
-          event.preventDefault();
-          void openProjectFromFile();
-        }
-        return;
-      }
-
-      // Échap quitte le mode performance, quel que soit le focus.
+      // Echap quitte le mode performance, quel que soit le focus.
       if (event.key === 'Escape') {
         const sc = useSceneStore.getState();
         if (sc.performanceMode) sc.setPerformanceMode(false);
         return;
       }
 
-      // Transport / cue (sans modificateur, hors champs de saisie).
-      if (isFormField || event.altKey) return;
-      const scene = useSceneStore.getState();
+      // Chiffres 1-9 : navigation rapide vers une scene (non personnalisable).
+      if (!isFormField && !event.ctrlKey && !event.metaKey && !event.altKey && /^[1-9]$/.test(event.key)) {
+        useSceneStore.getState().goToScene(Number(event.key) - 1);
+        return;
+      }
 
-      if (event.key === ' ') {
+      // Shortcuts avec modificateur (ctrl/meta) — eviter d'intercepter les
+      // champs de saisie sauf pour des raccourcis globaux.
+      if (!isFormField || event.ctrlKey || event.metaKey) {
+        if (matchesShortcut(event, shortcuts.undo) && !isFormField) {
+          event.preventDefault();
+          undo();
+          return;
+        }
+        if (matchesShortcut(event, shortcuts.redo) && !isFormField) {
+          event.preventDefault();
+          redo();
+          return;
+        }
+        if (matchesShortcut(event, shortcuts.saveProject)) {
+          event.preventDefault();
+          void saveProjectToFile();
+          return;
+        }
+        if (matchesShortcut(event, shortcuts.openProject)) {
+          event.preventDefault();
+          void openProjectFromFile();
+          return;
+        }
+      }
+
+      // Raccourcis sans modificateur, hors champs de saisie.
+      if (isFormField || event.altKey) return;
+
+      const scene = useSceneStore.getState();
+      const proj = useProjectStore.getState();
+
+      if (matchesShortcut(event, shortcuts.playPause)) {
         event.preventDefault();
         if (scene.playing) scene.pause();
         else scene.play();
-      } else if (event.key === 'ArrowRight') {
+      } else if (matchesShortcut(event, shortcuts.nextCue)) {
         event.preventDefault();
         scene.nextCue();
-      } else if (event.key === 'ArrowLeft') {
+      } else if (matchesShortcut(event, shortcuts.prevCue)) {
         event.preventDefault();
         scene.prevCue();
-      } else if (/^[1-9]$/.test(event.key)) {
-        scene.goToScene(Number(event.key) - 1);
-      } else {
-        const key = event.key.toLowerCase();
-        if (key === 't') scene.tap(performance.now());
-        else if (key === 'f') scene.togglePerformanceMode();
+      } else if (matchesShortcut(event, shortcuts.tapTempo)) {
+        scene.tap(performance.now());
+      } else if (matchesShortcut(event, shortcuts.togglePerformance)) {
+        scene.togglePerformanceMode();
+      } else if (matchesShortcut(event, shortcuts.deleteSurface)) {
+        const id = proj.selectedSurfaceId;
+        if (id) proj.removeSurface(id);
+      } else if (matchesShortcut(event, shortcuts.addSurface)) {
+        event.preventDefault();
+        proj.addSurface();
+      } else if (matchesShortcut(event, shortcuts.duplicateSurface)) {
+        event.preventDefault();
+        const id = proj.selectedSurfaceId;
+        if (id) proj.duplicateSurface(id);
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo, redo]);
+  }, [undo, redo, shortcuts]);
 }

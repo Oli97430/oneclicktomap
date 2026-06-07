@@ -239,6 +239,45 @@ test('polish : sauvegarde, edge blending et multi-sorties (UI)', async () => {
   await app.close();
 });
 
+test('Phase 9 : multi-selection + historique labelise', async () => {
+  const app: ElectronApplication = await electron.launch({ args: [MAIN] });
+  const editor = await app.firstWindow();
+  await editor.locator('.surface-row').first().waitFor();
+
+  // A1 : ajouter une surface et shift-cliquer pour multi-selectionner.
+  await editor.locator('.panel-head button[title="Ajouter une surface"]').click();
+  await expect(editor.locator('.surface-row')).toHaveCount(2);
+  const first = editor.locator('.surface-row').first().locator('.surface-name');
+  await first.click({ modifiers: ['Shift'] });
+  await expect(editor.locator('.surface-row.is-multi-selected, .surface-row.is-selected')).toHaveCount(2);
+
+  await app.close();
+});
+
+test('Phase 9 : calque texte (C4)', async () => {
+  const app: ElectronApplication = await electron.launch({ args: [MAIN] });
+  const editor = await app.firstWindow();
+  await editor.locator('.layer-row').first().waitFor();
+  await expect(editor.locator('.layer-row')).toHaveCount(1);
+
+  // A4/C4 : bouton T dans le panneau calques ajoute un calque texte.
+  await editor.locator('.panel-head button[aria-label="Calque texte"]').click();
+  await expect(editor.locator('.layer-row')).toHaveCount(2);
+
+  await app.close();
+});
+
+test('Phase 9 : screenshot et record buttons existent dans la toolbar', async () => {
+  const app: ElectronApplication = await electron.launch({ args: [MAIN] });
+  const editor = await app.firstWindow();
+  await editor.locator('.toolbar').waitFor();
+
+  await expect(editor.locator('button[aria-label="Screenshot"]')).toBeVisible();
+  await expect(editor.locator('button[aria-label="Enregistrer"]')).toBeVisible();
+
+  await app.close();
+});
+
 test('repositionnement de calque : gizmo (déplacer / pivoter / échelle) + clavier', async () => {
   const app: ElectronApplication = await electron.launch({ args: [MAIN] });
   const editor = await app.firstWindow();

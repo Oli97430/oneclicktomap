@@ -1,12 +1,15 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import {
   IPC,
+  type CalibrationPattern,
+  type CaptureResult,
   type DisplayInfo,
   type OneClickToMapApi,
   type OutputAssets,
   type OutputAudio,
   type OutputStatus,
   type OutputSurfaceState,
+  type RecentFilesResult,
 } from '../shared/contract';
 
 // Pont sécurisé : le renderer n'a accès qu'à cette API typée, jamais à Node.
@@ -59,6 +62,32 @@ const api: OneClickToMapApi = {
     const listener = (_event: IpcRendererEvent, status: OutputStatus) => callback(status);
     ipcRenderer.on(IPC.outputStatusChanged, listener);
     return () => ipcRenderer.removeListener(IPC.outputStatusChanged, listener);
+  },
+
+  // --- A3 : fichiers récents ---
+  getRecentFiles: (): Promise<RecentFilesResult> =>
+    ipcRenderer.invoke(IPC.getRecentFiles),
+  addRecentFile: (path: string): Promise<void> =>
+    ipcRenderer.invoke(IPC.addRecentFile, path),
+  clearRecentFiles: (): Promise<void> =>
+    ipcRenderer.invoke(IPC.clearRecentFiles),
+
+  // --- A5 : capture vidéo ---
+  saveCapture: (base64: string): Promise<CaptureResult> =>
+    ipcRenderer.invoke(IPC.saveCapture, base64),
+
+  // --- A6 : screenshot ---
+  saveScreenshot: (base64: string): Promise<CaptureResult> =>
+    ipcRenderer.invoke(IPC.saveScreenshot, base64),
+
+  // --- E1 : calibration ---
+  sendCalibrationPattern: (pattern: CalibrationPattern): void =>
+    ipcRenderer.send(IPC.calibrationPattern, pattern),
+  onCalibrationPattern: (callback) => {
+    const listener = (_event: IpcRendererEvent, pattern: CalibrationPattern) =>
+      callback(pattern);
+    ipcRenderer.on(IPC.calibrationPattern, listener);
+    return () => ipcRenderer.removeListener(IPC.calibrationPattern, listener);
   },
 };
 

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import warpVertexShader from './shaders/warp.vert.glsl';
 import warpFragmentShader from './shaders/warp.frag.glsl';
 import { perspectiveQuadWeights } from '@/utils/geometry';
-import { applyBlend } from './blend';
+import { applyBlend, BLEND_MODE_ADJ } from './blend';
 import type { BlendMode, LayerTransform, Vec2 } from '@/types';
 import type { EdgeBlend } from '@/utils/edgeBlend';
 import type { WarpObject } from './WarpObject';
@@ -62,6 +62,7 @@ export class WarpQuad implements WarpObject {
         uLayerScale: { value: 1 },
         uLayerRot: { value: 0 },
         uLayerAspect: { value: 1 },
+        uBlendModeAdj: { value: 0 },
       },
       side: THREE.DoubleSide,
       transparent: true,
@@ -104,6 +105,7 @@ export class WarpQuad implements WarpObject {
     if (blendMode !== this.currentBlend) {
       this.currentBlend = blendMode;
       this.material.uniforms.uBlendIdentity.value.setScalar(blendMode === 'multiply' ? 1 : 0);
+      this.material.uniforms.uBlendModeAdj.value = BLEND_MODE_ADJ[blendMode] ?? 0;
       applyBlend(this.material, blendMode);
     }
   }

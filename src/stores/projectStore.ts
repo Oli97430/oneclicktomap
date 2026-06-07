@@ -9,6 +9,7 @@ import type {
   ParticleParams,
   Project,
   Surface,
+  TextParams,
   Vec2,
   WarpMode,
 } from '@/types';
@@ -41,6 +42,18 @@ export const DEFAULT_PARTICLE_PARAMS: ParticleParams = {
   size: 6,
   gravity: 0.5,
   color: [1, 0.9, 0.6],
+};
+
+export const DEFAULT_TEXT_PARAMS: TextParams = {
+  content: 'Texte',
+  fontFamily: 'sans-serif',
+  fontSize: 64,
+  color: '#ffffff',
+  background: 'transparent',
+  align: 'center',
+  bold: false,
+  italic: false,
+  scrollSpeed: 0,
 };
 
 export const CONTROL_POINT_LABELS = [
@@ -158,19 +171,45 @@ function setSurfacePoint(
   }));
 }
 
+// ─── Historique avec labels (A7) ─────────────────────────────────────────────
+
 interface HistoryState {
   past: Project[];
+  /** Label de chaque état passé (même longueur que `past`). */
+  pastLabels: string[];
   project: Project;
+  /** Label de l'action qui a produit l'état courant. */
+  presentLabel: string;
   future: Project[];
+  /** Label de chaque état futur (même longueur que `future`). */
+  futureLabels: string[];
+}
+
+const MAX_HISTORY = 50;
+
+function commitStateLabeled(state: HistoryState, next: Project, label: string): HistoryState {
+  const h = commitHistory({ past: state.past, present: state.project, future: state.future }, next);
+  return {
+    project: h.present,
+    presentLabel: label,
+    past: h.past.slice(-MAX_HISTORY),
+    pastLabels: [...state.pastLabels, state.presentLabel].slice(-MAX_HISTORY),
+    future: [],
+    futureLabels: [],
+  };
 }
 
 function commitState(state: HistoryState, next: Project): HistoryState {
-  const h = commitHistory({ past: state.past, present: state.project, future: state.future }, next);
-  return { project: h.present, past: h.past, future: h.future };
+  return commitStateLabeled(state, next, '');
 }
 
+// ─── Sélection (A1 multi-sélection) ─────────────────────────────────────────
+
 interface SelectionState {
+  /** Identifiant de la surface sélectionnée en principal (affiche ses propriétés). */
   selectedSurfaceId: string | null;
+  /** A1 : toutes les surfaces sélectionnées (au moins selectedSurfaceId). */
+  selectedSurfaceIds: string[];
   selectedPoint: number | null;
   selectedLayerId: string | null;
 }
@@ -179,24 +218,40 @@ interface SelectionState {
 function fixSelection(
   project: Project,
   selectedSurfaceId: string | null,
+  selectedSurfaceIds: string[],
   selectedLayerId: string | null,
 ): SelectionState {
   const surface =
     project.surfaces.find((s) => s.id === selectedSurfaceId) ?? project.surfaces[0] ?? null;
+  const stillValid = selectedSurfaceIds.filter((id) => project.surfaces.some((s) => s.id === id));
+  const ids = stillValid.length ? stillValid : surface ? [surface.id] : [];
   const layers = surface?.layers ?? [];
   const layerId = layers.some((l) => l.id === selectedLayerId)
     ? selectedLayerId
     : (layers[layers.length - 1]?.id ?? null);
-  return { selectedSurfaceId: surface?.id ?? null, selectedPoint: null, selectedLayerId: layerId };
+  return {
+    selectedSurfaceId: surface?.id ?? null,
+    selectedSurfaceIds: ids,
+    selectedPoint: null,
+    selectedLayerId: layerId,
+  };
 }
+
+// ─── Interface du store ───────────────────────────────────────────────────────
 
 interface ProjectStore extends HistoryState, SelectionState {
   dragCheckpoint: Project | null;
 
   undo: () => void;
   redo: () => void;
+  /** A7 : libellés de l'historique (pour le panneau Historique). */
+  historyLabels: () => { past: string[]; present: string; future: string[] };
 
   selectSurface: (id: string) => void;
+  /** A1 : ajoute/retire une surface de la sélection (shift-click). */
+  addToSelection: (id: string) => void;
+  /** A1 : supprime toutes les surfaces sélectionnées (si > 1 restante). */
+  deleteSelectedSurfaces: () => void;
   setSelectedPoint: (index: number | null) => void;
   selectLayer: (id: string) => void;
 
@@ -210,6 +265,10 @@ interface ProjectStore extends HistoryState, SelectionState {
   setSurfaceOutput: (surfaceId: string, output: number) => void;
 
   addLayer: (surfaceId: string, source: LayerSource, name: string) => void;
+  /** C4 : ajoute un calque texte avec des paramètres initiaux. */
+  addTextLayer: (surfaceId: string, params?: Partial<TextParams>) => void;
+  /** C6 : ajoute un calque flux HLS/RTSP. */
+  addStreamLayer: (surfaceId: string, url: string, name?: string) => void;
   removeLayer: (surfaceId: string, layerId: string) => void;
   moveLayer: (surfaceId: string, layerId: string, direction: 1 | -1) => void;
   setLayerBlend: (surfaceId: string, layerId: string, blendMode: BlendMode) => void;
@@ -223,6 +282,10 @@ interface ProjectStore extends HistoryState, SelectionState {
   toggleLayerVisible: (surfaceId: string, layerId: string) => void;
   setLayerShaderCode: (surfaceId: string, layerId: string, code: string) => void;
   setLayerParticlesTransient: (surfaceId: string, layerId: string, params: ParticleParams) => void;
+  /** D2 : met à jour les valeurs des uniforms exposés d'un calque génératif. */
+  setShaderParams: (surfaceId: string, layerId: string, params: Record<string, number>) => void;
+  /** C4 : met à jour les paramètres d'un calque texte (transitoire). */
+  setTextParamsTransient: (surfaceId: string, layerId: string, params: TextParams) => void;
   setBlendEdgeTransient: (
     surfaceId: string,
     edge: BlendZone['edge'],
@@ -245,34 +308,54 @@ interface ProjectStore extends HistoryState, SelectionState {
   resetSurface: (surfaceId: string) => void;
 }
 
-export const useProjectStore = create<ProjectStore>((set) => ({
+// ─── Implémentation ───────────────────────────────────────────────────────────
+
+export const useProjectStore = create<ProjectStore>((set, get) => ({
   project: createDefaultProject(),
   past: [],
+  pastLabels: [],
   future: [],
+  futureLabels: [],
+  presentLabel: '',
   dragCheckpoint: null,
   selectedSurfaceId: 'surface-1',
+  selectedSurfaceIds: ['surface-1'],
   selectedPoint: null,
   selectedLayerId: 'layer-1',
 
+  // --- A7 : labels de l'historique (getter pur, pas de mutation) ---
+  historyLabels: () => {
+    const s = get();
+    return { past: s.pastLabels, present: s.presentLabel, future: s.futureLabels };
+  },
+
   undo: () =>
     set((s) => {
+      if (!s.past.length) return {};
       const h = undoHistory({ past: s.past, present: s.project, future: s.future });
       return {
         project: h.present,
+        presentLabel: s.pastLabels[s.pastLabels.length - 1] ?? '',
         past: h.past,
+        pastLabels: s.pastLabels.slice(0, -1),
         future: h.future,
-        ...fixSelection(h.present, s.selectedSurfaceId, s.selectedLayerId),
+        futureLabels: [s.presentLabel, ...s.futureLabels],
+        ...fixSelection(h.present, s.selectedSurfaceId, s.selectedSurfaceIds, s.selectedLayerId),
       };
     }),
 
   redo: () =>
     set((s) => {
+      if (!s.future.length) return {};
       const h = redoHistory({ past: s.past, present: s.project, future: s.future });
       return {
         project: h.present,
+        presentLabel: s.futureLabels[0] ?? '',
         past: h.past,
+        pastLabels: [...s.pastLabels, s.presentLabel],
         future: h.future,
-        ...fixSelection(h.present, s.selectedSurfaceId, s.selectedLayerId),
+        futureLabels: s.futureLabels.slice(1),
+        ...fixSelection(h.present, s.selectedSurfaceId, s.selectedSurfaceIds, s.selectedLayerId),
       };
     }),
 
@@ -280,8 +363,44 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   selectSurface: (id) =>
     set((s) => {
       const layers = s.project.surfaces.find((x) => x.id === id)?.layers ?? [];
-      return { selectedSurfaceId: id, selectedPoint: null, selectedLayerId: lastLayerId(layers) };
+      return {
+        selectedSurfaceId: id,
+        selectedSurfaceIds: [id],
+        selectedPoint: null,
+        selectedLayerId: lastLayerId(layers),
+      };
     }),
+
+  // A1 : shift-click : bascule la présence d'une surface dans la sélection.
+  addToSelection: (id) =>
+    set((s) => {
+      const already = s.selectedSurfaceIds.includes(id);
+      const ids = already
+        ? s.selectedSurfaceIds.filter((x) => x !== id)
+        : [...s.selectedSurfaceIds, id];
+      const primary = ids.length ? (ids.includes(id) ? id : (ids[0] ?? null)) : null;
+      const layers = primary
+        ? (s.project.surfaces.find((x) => x.id === primary)?.layers ?? [])
+        : [];
+      return {
+        selectedSurfaceId: primary,
+        selectedSurfaceIds: ids.length ? ids : [s.selectedSurfaceId ?? id],
+        selectedLayerId: lastLayerId(layers),
+        selectedPoint: null,
+      };
+    }),
+
+  // A1 : supprime toutes les surfaces sélectionnées (minimum 1 restante).
+  deleteSelectedSurfaces: () =>
+    set((s) => {
+      const toDelete = new Set(s.selectedSurfaceIds);
+      const remaining = s.project.surfaces.filter((x) => !toDelete.has(x.id));
+      if (remaining.length === 0) return {}; // garde au moins une surface
+      const next = { ...s.project, surfaces: remaining };
+      const committed = commitStateLabeled(s, next, 'Supprimer surfaces');
+      return { ...committed, ...fixSelection(next, null, [], null) };
+    }),
+
   setSelectedPoint: (index) => set({ selectedPoint: index }),
   selectLayer: (id) => set({ selectedLayerId: id }),
 
@@ -291,14 +410,14 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const surface = createSurface(nextSurfaceName(s.project.surfaces));
       const next = { ...s.project, surfaces: [...s.project.surfaces, surface] };
       return {
-        ...commitState(s, next),
+        ...commitStateLabeled(s, next, 'Ajouter surface'),
         selectedSurfaceId: surface.id,
+        selectedSurfaceIds: [surface.id],
         selectedPoint: null,
         selectedLayerId: lastLayerId(surface.layers),
       };
     }),
 
-  // Crée une surface à partir d'une détection caméra (auto-mapping).
   addSurfaceFromDetection: (controlPoints, mode = 'quad') =>
     set((s) => {
       if (controlPoints.length !== 4) return {};
@@ -312,42 +431,43 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       };
       const next = { ...s.project, surfaces: [...s.project.surfaces, surface] };
       return {
-        ...commitState(s, next),
+        ...commitStateLabeled(s, next, 'Détecter surface'),
         selectedSurfaceId: surface.id,
+        selectedSurfaceIds: [surface.id],
         selectedPoint: null,
         selectedLayerId: lastLayerId(surface.layers),
       };
     }),
 
-  // Remplace l'ensemble des surfaces (timeline). `transient` = pas d'historique
-  // (morphs de lecture image par image) ; sinon historisé (application d'une scène).
   replaceSurfaces: (surfaces, options) =>
     set((s) => {
       const next = { ...s.project, surfaces };
       if (options?.transient) return { project: next };
       return {
-        ...commitState(s, next),
-        ...fixSelection(next, s.selectedSurfaceId, s.selectedLayerId),
+        ...commitStateLabeled(s, next, 'Appliquer scène'),
+        ...fixSelection(next, s.selectedSurfaceId, s.selectedSurfaceIds, s.selectedLayerId),
       };
     }),
 
-  // Charge un projet depuis un fichier : remplace tout et réinitialise l'historique.
   loadProject: (project) =>
     set(() => ({
       project,
       past: [],
+      pastLabels: [],
       future: [],
+      futureLabels: [],
+      presentLabel: '',
       dragCheckpoint: null,
-      ...fixSelection(project, null, null),
+      ...fixSelection(project, null, [], null),
     })),
 
   removeSurface: (id) =>
     set((s) => {
       if (s.project.surfaces.length <= 1) return {};
       const next = { ...s.project, surfaces: s.project.surfaces.filter((x) => x.id !== id) };
-      const committed = commitState(s, next);
+      const committed = commitStateLabeled(s, next, 'Supprimer surface');
       if (s.selectedSurfaceId !== id) return committed;
-      return { ...committed, ...fixSelection(next, null, null) };
+      return { ...committed, ...fixSelection(next, null, [], null) };
     }),
 
   duplicateSurface: (id) =>
@@ -374,8 +494,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       surfaces.splice(index + 1, 0, copy);
       const next = { ...s.project, surfaces };
       return {
-        ...commitState(s, next),
+        ...commitStateLabeled(s, next, 'Dupliquer surface'),
         selectedSurfaceId: copy.id,
+        selectedSurfaceIds: [copy.id],
         selectedPoint: null,
         selectedLayerId: lastLayerId(copy.layers),
       };
@@ -383,17 +504,19 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   toggleSurfaceVisible: (id) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapSurface(s.project, id, (su) => ({ ...su, visible: !su.visible })),
+        'Visibilité surface',
       ),
     ),
 
   setSurfaceOutput: (surfaceId, output) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapSurface(s.project, surfaceId, (su) => ({ ...su, output })),
+        'Affecter sortie',
       ),
     ),
 
@@ -405,7 +528,30 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         ...su,
         layers: [...su.layers, layer],
       }));
-      return { ...commitState(s, next), selectedLayerId: layer.id };
+      return { ...commitStateLabeled(s, next, 'Ajouter calque'), selectedLayerId: layer.id };
+    }),
+
+  // C4 : calque texte.
+  addTextLayer: (surfaceId, params) =>
+    set((s) => {
+      const textParams: TextParams = { ...DEFAULT_TEXT_PARAMS, ...params };
+      const layer = createLayer('Texte', { kind: 'text', textParams });
+      const next = mapSurface(s.project, surfaceId, (su) => ({
+        ...su,
+        layers: [...su.layers, layer],
+      }));
+      return { ...commitStateLabeled(s, next, 'Ajouter calque texte'), selectedLayerId: layer.id };
+    }),
+
+  // C6 : calque flux HLS/RTSP.
+  addStreamLayer: (surfaceId, url, name) =>
+    set((s) => {
+      const layer = createLayer(name ?? 'Flux', { kind: 'stream', streamUrl: url });
+      const next = mapSurface(s.project, surfaceId, (su) => ({
+        ...su,
+        layers: [...su.layers, layer],
+      }));
+      return { ...commitStateLabeled(s, next, 'Ajouter calque flux'), selectedLayerId: layer.id };
     }),
 
   removeLayer: (surfaceId, layerId) =>
@@ -414,7 +560,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         ...su,
         layers: su.layers.filter((l) => l.id !== layerId),
       }));
-      const committed = commitState(s, next);
+      const committed = commitStateLabeled(s, next, 'Supprimer calque');
       if (s.selectedLayerId !== layerId) return committed;
       const remaining = next.surfaces.find((x) => x.id === surfaceId)?.layers ?? [];
       return { ...committed, selectedLayerId: lastLayerId(remaining) };
@@ -430,55 +576,57 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const layers = [...surface.layers];
       const [moved] = layers.splice(idx, 1);
       layers.splice(target, 0, moved);
-      return commitState(
+      return commitStateLabeled(
         s,
         mapSurface(s.project, surfaceId, (su) => ({ ...su, layers })),
+        'Déplacer calque',
       );
     }),
 
   setLayerBlend: (surfaceId, layerId, blendMode) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, blendMode })),
+        'Mode de fusion',
       ),
     ),
 
   setLayerOpacityTransient: (surfaceId, layerId, opacity) =>
     set((s) => ({ project: mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, opacity })) })),
 
-  // Repositionnement du contenu : transitoire pendant le glisser (commit au
-  // relâchement via beginDrag/endDrag).
   setLayerTransformTransient: (surfaceId, layerId, transform) =>
     set((s) => ({
       project: mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, transform })),
     })),
 
-  // Clavier : une étape d'historique par appui.
   nudgeLayerTransform: (surfaceId, layerId, transform) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, transform })),
+        'Transformer calque',
       ),
     ),
 
   toggleLayerVisible: (surfaceId, layerId) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapLayer(s.project, surfaceId, layerId, (l) => ({ ...l, visible: !l.visible })),
+        'Visibilité calque',
       ),
     ),
 
   setLayerShaderCode: (surfaceId, layerId, code) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapLayer(s.project, surfaceId, layerId, (l) => ({
           ...l,
           source: { ...l.source, shaderCode: code },
         })),
+        'Modifier shader',
       ),
     ),
 
@@ -490,14 +638,32 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       })),
     })),
 
-  // Edge blending : un BlendZone par bord. size<=0 ⇒ retire le bord. Transitoire
-  // (sans historique) ; le commit se fait au relâchement via beginDrag/endDrag.
+  // D2 : met à jour les uniforms exposés (commit historique).
+  setShaderParams: (surfaceId, layerId, params) =>
+    set((s) =>
+      commitStateLabeled(
+        s,
+        mapLayer(s.project, surfaceId, layerId, (l) => ({
+          ...l,
+          source: { ...l.source, shaderParams: params },
+        })),
+        'Paramètres shader',
+      ),
+    ),
+
+  // C4 : mise à jour transitoire des paramètres de texte (pendant la saisie).
+  setTextParamsTransient: (surfaceId, layerId, params) =>
+    set((s) => ({
+      project: mapLayer(s.project, surfaceId, layerId, (l) => ({
+        ...l,
+        source: { ...l.source, textParams: params },
+      })),
+    })),
+
   setBlendEdgeTransient: (surfaceId, edge, size, gamma) =>
     set((s) => ({
       project: mapSurface(s.project, surfaceId, (su) => {
         const others = su.blendZones.filter((z) => z.edge !== edge);
-        // On conserve le bord (size=0 reste neutre côté shader) pour ne pas perdre
-        // le gamma réglé lors d'un aller-retour du curseur par 0.
         const zones: BlendZone[] = [...others, { id: edge, edge, size: Math.max(0, size), gamma }];
         return { ...su, blendZones: zones };
       }),
@@ -506,18 +672,19 @@ export const useProjectStore = create<ProjectStore>((set) => ({
   // --- Masque de découpe (historisé, sauf le glisser des points) ---
   toggleMask: (surfaceId) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapSurface(s.project, surfaceId, (su) => {
           const mask = currentMask(su);
           return { ...su, mask: { ...mask, enabled: !mask.enabled } };
         }),
+        'Masque',
       ),
     ),
 
   addMaskPoint: (surfaceId) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapSurface(s.project, surfaceId, (su) => {
           const mask = currentMask(su);
@@ -525,7 +692,6 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           if (pts.length < 2) {
             return { ...su, mask: { ...mask, points: DEFAULT_MASK_POINTS.map((p) => ({ ...p })) } };
           }
-          // Insère un point au milieu du côté le plus long.
           let bestEdge = 0;
           let bestLen = -1;
           for (let i = 0; i < pts.length; i += 1) {
@@ -543,6 +709,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           points.splice(bestEdge + 1, 0, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
           return { ...su, mask: { ...mask, points } };
         }),
+        'Ajouter point masque',
       ),
     ),
 
@@ -551,12 +718,13 @@ export const useProjectStore = create<ProjectStore>((set) => ({
       const surface = s.project.surfaces.find((x) => x.id === surfaceId);
       const mask = surface?.mask;
       if (!mask || mask.points.length <= 3) return {};
-      return commitState(
+      return commitStateLabeled(
         s,
         mapSurface(s.project, surfaceId, (su) => ({
           ...su,
           mask: { ...currentMask(su), points: mask.points.filter((_, i) => i !== index) },
         })),
+        'Supprimer point masque',
       );
     }),
 
@@ -573,7 +741,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
 
   nudgeMaskPoint: (surfaceId, index, position) =>
     set((s) =>
-      commitState(
+      commitStateLabeled(
         s,
         mapSurface(s.project, surfaceId, (su) => {
           const mask = currentMask(su);
@@ -582,12 +750,11 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             mask: { ...mask, points: mask.points.map((p, i) => (i === index ? position : p)) },
           };
         }),
+        'Déplacer point masque',
       ),
     ),
 
   // --- Glisser : transitoire (sans historique) puis commit au relâchement. ---
-  // Idempotent : ne réécrase pas un point de contrôle déjà capturé (auto-répétition
-  // clavier d'un slider, etc.).
   beginDrag: () => set((s) => (s.dragCheckpoint ? {} : { dragCheckpoint: s.project })),
 
   updateControlPointTransient: (surfaceId, index, position) =>
@@ -600,14 +767,23 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           { past: s.past, present: s.dragCheckpoint, future: s.future },
           s.project,
         );
-        return { project: h.present, past: h.past, future: h.future, dragCheckpoint: null };
+        return {
+          project: h.present,
+          presentLabel: 'Déplacer point',
+          past: h.past.slice(-MAX_HISTORY),
+          pastLabels: [...s.pastLabels, s.presentLabel].slice(-MAX_HISTORY),
+          future: [],
+          futureLabels: [],
+          dragCheckpoint: null,
+        };
       }
       return { dragCheckpoint: null };
     }),
 
-  // --- Clavier : déplacement discret (une étape d'historique par appui). ---
   nudgeControlPoint: (surfaceId, index, position) =>
-    set((s) => commitState(s, setSurfacePoint(s.project, surfaceId, index, position))),
+    set((s) =>
+      commitStateLabeled(s, setSurfacePoint(s.project, surfaceId, index, position), 'Déplacer point'),
+    ),
 
   setWarpMode: (surfaceId, mode) =>
     set((s) => {
@@ -621,7 +797,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
         controlPoints:
           mode === 'grid' ? quadToGrid(su.controlPoints, size) : gridToQuad(su.controlPoints, size),
       }));
-      return { ...commitState(s, next), selectedPoint: null };
+      return { ...commitStateLabeled(s, next, 'Mode de déformation'), selectedPoint: null };
     }),
 
   setGridSize: (surfaceId, size) =>
@@ -635,7 +811,7 @@ export const useProjectStore = create<ProjectStore>((set) => ({
           ? { ...su, gridSize: size, controlPoints: resampleGrid(su.controlPoints, old, size) }
           : { ...su, gridSize: size },
       );
-      return { ...commitState(s, next), selectedPoint: null };
+      return { ...commitStateLabeled(s, next, 'Taille de grille'), selectedPoint: null };
     }),
 
   resetSurface: (surfaceId) =>
@@ -650,6 +826,9 @@ export const useProjectStore = create<ProjectStore>((set) => ({
             su.warpMode === 'grid' ? quadToGrid(quad, su.gridSize ?? DEFAULT_GRID_SIZE) : quad,
         };
       });
-      return commitState(s, next);
+      return commitStateLabeled(s, next, 'Réinitialiser surface');
     }),
 }));
+
+// Ré-exporte commitState pour les tests (historyLabels.test etc.)
+export { commitState };

@@ -4,6 +4,8 @@ import { WarpQuad } from './WarpQuad';
 import { WarpGrid } from './WarpGrid';
 import { createCheckerTexture, createMaskTexture, createSolidTexture } from './textures';
 import { GenerativeTexture } from './GenerativeTexture';
+// Note : 'activeDynamic' utilisé dans dynamicFor() mais aussi pour text/stream
+// → les calques de type 'text' et 'stream' sont résolus via resolveTexture (cache externe).
 import { ParticleTexture } from './ParticleTexture';
 import type { DynamicTexture } from './DynamicTexture';
 import type { WarpObject } from './WarpObject';
@@ -15,7 +17,7 @@ import { LAYER_TRANSFORM_IDENTITY } from '@/utils/layerTransform';
 
 export interface StageLayer {
   id: string;
-  kind: 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles';
+  kind: 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles' | 'text' | 'stream';
   blendMode: BlendMode;
   opacity: number;
   visible: boolean;
@@ -25,6 +27,8 @@ export interface StageLayer {
   particles?: ParticleParams;
   /** Repositionnement du contenu dans la surface (absent = identité). */
   transform?: LayerTransform;
+  /** D2 : valeurs des uniforms exposés (uP_*) pour les shaders paramétrés. */
+  shaderParams?: Record<string, number>;
 }
 
 export interface StageMask {
@@ -96,13 +100,21 @@ export class Stage {
   private selectedId: string | null = null;
   private showOutlines = true;
   private resolveTexture: TextureResolver = () => null;
+  /**
+   * Appelé à chaque frame, avant le rendu. Utilisé par l'appelant pour ticker
+   * les textures externes (ex. MediaTextureCache.update() pour les vidéos).
+   */
+  onFrameTick?: () => void;
 
   constructor(canvas: HTMLCanvasElement, options: StageOptions = {}) {
     this.renderer = new Renderer(canvas, { clearColor: options.background });
     this.defaultTexture = createCheckerTexture();
     this.defaultMask = createSolidTexture();
     this.renderer.onResize = () => this.applyCorners();
-    this.renderer.onFrame = (time) => this.renderDynamic(time);
+    this.renderer.onFrame = (time) => {
+      this.renderDynamic(time);
+      this.onFrameTick?.();
+    };
   }
 
   setShowOutlines(visible: boolean): void {
@@ -186,6 +198,7 @@ export class Stage {
   private textureFor(surfaceId: string, layer: StageLayer): THREE.Texture {
     if (layer.kind === 'pattern') return this.defaultTexture;
     if (layer.kind === 'generative' || layer.kind === 'particles') return this.dynamicFor(layer);
+    // text, stream, image, video, webcam → résolution via cache externe
     return this.resolveTexture(surfaceId, layer) ?? this.defaultTexture;
   }
 
@@ -218,6 +231,10 @@ export class Stage {
     }
     entry.visible = layer.visible;
     if (kind === 'particles') (entry.obj as ParticleTexture).update(layer.particles!);
+    // D2 : toujours repousser les params exposés (sliders) vers le shader.
+    if (kind === 'generative' && layer.shaderParams) {
+      (entry.obj as GenerativeTexture).setParams(layer.shaderParams);
+    }
     return entry.obj.texture;
   }
 

@@ -45,18 +45,25 @@ export interface Point2 {
   y: number;
 }
 
-export type OutputBlendMode = 'normal' | 'add' | 'multiply' | 'screen';
+export type OutputBlendMode =
+  | 'normal'
+  | 'add'
+  | 'multiply'
+  | 'screen'
+  | 'overlay'
+  | 'softlight'
+  | 'difference'
+  | 'colordodge';
 
 export interface OutputLayer {
   id: string;
-  kind: 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles';
+  kind: 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles' | 'text' | 'stream';
   blendMode: OutputBlendMode;
   opacity: number;
   visible: boolean;
-  /** Pour webcam : identifiant du périphérique. (image/video dataUrl ET generative
-   *  shaderCode passent par le canal `assets`, rare, pour ne pas être renvoyés à chaque drag.) */
+  /** Pour webcam : identifiant du périphérique. */
   deviceId?: string;
-  /** Pour particles : paramètres (petits, transitent par le canal fréquent). */
+  /** Pour particles : paramètres. */
   particles?: {
     count: number;
     speed: number;
@@ -64,8 +71,12 @@ export interface OutputLayer {
     gravity: number;
     color: [number, number, number];
   };
-  /** Repositionnement du contenu dans la surface (offset uv, échelle, rotation). */
+  /** Repositionnement du contenu dans la surface. */
   transform?: { offsetX: number; offsetY: number; scale: number; rotation: number };
+  /** Pour stream HLS : URL (C6). */
+  streamUrl?: string;
+  /** D2 : valeurs des uniforms exposés. */
+  shaderParams?: Record<string, number>;
 }
 
 /** État de déformation d'une surface, synchronisé éditeur -> sortie (géométrie + styles). */
@@ -111,6 +122,26 @@ export interface OpenResult {
   text?: string;
 }
 
+/** A3 : fichiers récents (5 derniers projets). */
+export interface RecentFilesResult {
+  paths: string[];
+}
+
+/** A5/A6 : résultat d'un enregistrement de capture / screenshot. */
+export interface CaptureResult {
+  ok: boolean;
+  canceled?: boolean;
+  error?: string;
+  path?: string;
+}
+
+/** E1 : un motif de calibration à projeter. */
+export interface CalibrationPattern {
+  index: number;  // -1 = désactiver le mode calibration
+  totalCount: number;
+  imageData: string; // data URL PNG du motif
+}
+
 export interface OneClickToMapApi {
   getDisplays: () => Promise<DisplayInfo[]>;
   /** Notifié quand des écrans sont (dé)connectés — ex. Miracast / AirPlay-écran. */
@@ -120,6 +151,23 @@ export interface OneClickToMapApi {
   // --- Projets (sauvegarde / chargement via dialogues natifs) ---
   saveProject: (json: string) => Promise<SaveResult>;
   openProject: () => Promise<OpenResult>;
+
+  // --- A3 : fichiers récents ---
+  getRecentFiles: () => Promise<RecentFilesResult>;
+  addRecentFile: (path: string) => Promise<void>;
+  clearRecentFiles: () => Promise<void>;
+
+  // --- A5 : capture vidéo (WebM base64 → fichier natif) ---
+  saveCapture: (base64: string) => Promise<CaptureResult>;
+
+  // --- A6 : screenshot (PNG base64 → fichier natif) ---
+  saveScreenshot: (base64: string) => Promise<CaptureResult>;
+
+  // --- E1 : calibration caméra-projecteur ---
+  /** Diffuse un motif de calibration à toutes les sorties ; index=-1 = fin. */
+  sendCalibrationPattern: (pattern: CalibrationPattern) => void;
+  /** Notifié dans la fenêtre de sortie quand un motif est reçu. */
+  onCalibrationPattern: (callback: (pattern: CalibrationPattern) => void) => () => void;
 
   // --- Sorties plein écran (projecteurs, multi-fenêtres) ---
   /** Ouvre/repositionne une sortie sur l'écran donné (null = auto) pour l'index logique. */
@@ -161,4 +209,11 @@ export const IPC = {
   outputAudio: 'output:audio',
   requestSync: 'output:request-sync',
   outputStatusChanged: 'output:status-changed',
+  // Phase 9
+  getRecentFiles: 'files:recent-get',
+  addRecentFile: 'files:recent-add',
+  clearRecentFiles: 'files:recent-clear',
+  saveCapture: 'capture:save',
+  saveScreenshot: 'capture:screenshot',
+  calibrationPattern: 'calibration:pattern',
 } as const;

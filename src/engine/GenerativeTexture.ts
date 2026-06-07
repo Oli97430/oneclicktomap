@@ -86,6 +86,22 @@ export class GenerativeTexture implements DynamicTexture {
     return this.renderTarget.texture;
   }
 
+  /**
+   * D2 : met à jour les uniforms exposés (uP_*) depuis les valeurs du store.
+   * Appelé à chaque sync() si le calque a des shaderParams.
+   */
+  setParams(params: Record<string, number>): void {
+    for (const [name, value] of Object.entries(params)) {
+      const uniformName = name.startsWith('uP_') ? name : `uP_${name}`;
+      if (uniformName in this.material.uniforms) {
+        this.material.uniforms[uniformName].value = value;
+      } else {
+        // Uniforme déclaré dans le code mais pas encore dans la map : l'ajouter.
+        this.material.uniforms[uniformName] = { value };
+      }
+    }
+  }
+
   render(renderer: THREE.WebGLRenderer, time: number, audio: AudioFeatures): void {
     const u = this.material.uniforms;
     u.uTime.value = time;

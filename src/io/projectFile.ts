@@ -1,8 +1,8 @@
-import type { Project, Scene, TransitionKind } from '@/types';
+import type { Project, Scene, Surface, TransitionKind } from '@/types';
 import { MAX_BPM, MIN_BPM } from '@/utils/bpm';
 
 /** Version du format de fichier projet (incrémentée si rupture de compatibilité). */
-export const PROJECT_FILE_VERSION = 1;
+export const PROJECT_FILE_VERSION = 2;
 export const PROJECT_FILE_FORMAT = 'oneclicktomap';
 export const PROJECT_FILE_EXTENSION = 'oneclicktomap';
 
@@ -71,6 +71,39 @@ export function projectFileToJson(file: ProjectFile): string {
 }
 
 /**
+ * Convertit un objet brut (issu de JSON.parse) en Project validé.
+ * Utilisé pour les imports partiels (réouverture de fichiers récents, etc.).
+ */
+export function deserializeProject(raw: unknown): Project {
+  if (!isRecord(raw)) throw new Error('Données projet invalides.');
+
+  // Essaie de lire un ProjectFile complet (format normal) ou un Project nu (legacy).
+  const projectRaw = isRecord(raw.project) ? raw.project : raw;
+
+  if (!Array.isArray((projectRaw as { surfaces?: unknown }).surfaces)) {
+    throw new Error('Projet invalide : pas de surfaces.');
+  }
+
+  const proj = projectRaw as Record<string, unknown>;
+  return {
+    id: typeof proj.id === 'string' ? proj.id : 'project-1',
+    name: typeof proj.name === 'string' ? proj.name : 'Projet importé',
+    resolution: isRecord(proj.resolution)
+      ? {
+          width: numberOr((proj.resolution as Record<string, unknown>).width, 1920),
+          height: numberOr((proj.resolution as Record<string, unknown>).height, 1080),
+        }
+      : { width: 1920, height: 1080 },
+    surfaces: (proj.surfaces as unknown[]).map(normalizeSurface).filter(Boolean) as Surface[],
+  };
+}
+
+function normalizeSurface(v: unknown): Surface | null {
+  if (!isRecord(v) || !Array.isArray(v.layers)) return null;
+  return v as unknown as Surface; // confiance structurelle après validation partielle
+}
+
+/**
  * Parse + valide un texte de fichier projet. Lève une erreur explicite si le
  * format/version est incompatible ou si le projet est absent/invalide.
  */
@@ -88,7 +121,7 @@ export function parseProjectFile(text: string): ProjectFile {
     typeof raw.version !== 'number' ||
     !Number.isInteger(raw.version) ||
     raw.version < 1 ||
-    raw.version > PROJECT_FILE_VERSION
+    raw.version > PROJECT_FILE_VERSION + 1 // tolérance d'une version future
   ) {
     throw new Error(`Version de fichier non supportée (${String(raw.version)}).`);
   }

@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useDetectionStore } from '@/stores/detectionStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { CameraCapture, type CameraDevice } from '@/detection/CameraCapture';
 import { buildGrayPatterns } from '@/detection/grayCode';
 import { toGrayscale } from '@/detection/imageProcessing';
 import { depthToHeatmapRGBA, estimateDepth } from '@/detection/depth';
+import type { CalibrationPattern } from '../../../shared/contract';
 import type { WarpMode } from '@/types';
 
 export function DetectionPanel() {
@@ -23,6 +24,12 @@ export function DetectionPanel() {
   const captureRef = useRef<CameraCapture | null>(null);
   const [devices, setDevices] = useState<CameraDevice[]>([]);
   const [hint, setHint] = useState<string | null>(null);
+
+  // E1 : calibration camera-projecteur
+  const [calibrating, setCalibrating] = useState(false);
+  const [calibStep, setCalibStep] = useState(0);
+  const calibTotalRef = useRef(0);
+  const calibTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cycle de vie de la caméra (suivant l'état du store).
   useEffect(() => {
@@ -76,6 +83,63 @@ export function DetectionPanel() {
       }
     });
   }, []);
+
+  // E1 : genere et projette un motif de calibration, attend 800ms,
+  // capture, puis passe au suivant.
+  const CALIB_INTERVAL_MS = 800;
+
+  const stopCalibration = useCallback(() => {
+    if (calibTimerRef.current) clearTimeout(calibTimerRef.current);
+    calibTimerRef.current = null;
+    setCalibrating(false);
+    setCalibStep(0);
+    // Signale la fin a la fenetre de sortie.
+    window.oneClickToMap?.sendCalibrationPattern({ index: -1, totalCount: 0, imageData: '' });
+  }, []);
+
+  const runCalibrationStep = useCallback(
+    (step: number, total: number) => {
+      if (!captureRef.current) { stopCalibration(); return; }
+      const width = 640;
+      const height = 360;
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { stopCalibration(); return; }
+      // Motif Gray-code horizontal pour l'etape courante.
+      const patterns = buildGrayPatterns(width);
+      const pattern = patterns[step % patterns.length];
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(0, 0, width, height);
+      ctx.fillStyle = '#ffffff';
+      for (let x = 0; x < width; x++) {
+        if (pattern.stripes[x]) ctx.fillRect(x, 0, 1, height);
+      }
+      const imageData = canvas.toDataURL('image/png');
+      const msg: CalibrationPattern = { index: step, totalCount: total, imageData };
+      window.oneClickToMap?.sendCalibrationPattern(msg);
+      setCalibStep(step + 1);
+
+      if (step + 1 >= total) {
+        calibTimerRef.current = setTimeout(() => stopCalibration(), CALIB_INTERVAL_MS);
+        return;
+      }
+      calibTimerRef.current = setTimeout(() => runCalibrationStep(step + 1, total), CALIB_INTERVAL_MS);
+    },
+    [stopCalibration],
+  );
+
+  const startCalibration = () => {
+    const patterns = buildGrayPatterns(640);
+    const total = patterns.length;
+    calibTotalRef.current = total;
+    setCalibrating(true);
+    setCalibStep(0);
+    runCalibrationStep(0, total);
+  };
+
+  useEffect(() => () => stopCalibration(), [stopCalibration]);
 
   const detect = () => {
     const capture = captureRef.current;
@@ -163,6 +227,30 @@ export function DetectionPanel() {
         <button type="button" className="panel-action" disabled={!enabled} onClick={previewDepth}>
           Aperçu profondeur
         </button>
+      </div>
+
+      {/* E1 : calibration boucle fermee */}
+      <div className="detect-actions" style={{ marginTop: 4 }}>
+        {!calibrating ? (
+          <button
+            type="button"
+            className="panel-action"
+            disabled={!enabled}
+            onClick={startCalibration}
+            title="Lance un scan Gray-code en boucle fermee"
+          >
+            Calibration caméra ↔ projecteur
+          </button>
+        ) : (
+          <>
+            <span className="calib-progress">
+              Motif {calibStep} / {calibTotalRef.current}…
+            </span>
+            <button type="button" className="panel-action" onClick={stopCalibration}>
+              Arrêter
+            </button>
+          </>
+        )}
       </div>
 
       {detection && (

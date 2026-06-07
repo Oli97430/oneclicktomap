@@ -4,6 +4,7 @@ import {
   parseProjectFile,
   projectFileToJson,
   serializeProject,
+  deserializeProject,
 } from '@/io/projectFile';
 import type { Project, Scene } from '@/types';
 
@@ -133,7 +134,81 @@ describe('projectFile', () => {
     });
   });
 
-  it('borne le BPM au chargement et rejette les versions ≤ 0', () => {
+  it('preserve textParams dans un aller-retour (C4)', () => {
+    const withText: Project = {
+      ...project,
+      surfaces: [
+        {
+          ...project.surfaces[0],
+          layers: [
+            {
+              id: 'l-text',
+              name: 'Texte',
+              source: {
+                kind: 'text',
+                textParams: {
+                  content: 'Hello',
+                  fontFamily: 'sans-serif',
+                  fontSize: 64,
+                  color: '#fff',
+                  background: 'transparent',
+                  align: 'center',
+                  bold: false,
+                  italic: false,
+                  scrollSpeed: 0,
+                },
+              },
+              blendMode: 'normal',
+              opacity: 1,
+              visible: true,
+            },
+          ],
+        },
+      ],
+    };
+    const file = serializeProject({ project: withText, scenes: [], settings: { bpm: 120, loop: true } });
+    const parsed = parseProjectFile(projectFileToJson(file));
+    const tp = parsed.project.surfaces[0].layers[0].source.textParams;
+    expect(tp?.content).toBe('Hello');
+    expect(tp?.align).toBe('center');
+  });
+
+  it('preserve shaderParams dans un aller-retour (D2)', () => {
+    const withShader: Project = {
+      ...project,
+      surfaces: [
+        {
+          ...project.surfaces[0],
+          layers: [
+            {
+              id: 'l-gen',
+              name: 'Shader',
+              source: {
+                kind: 'generative',
+                shaderCode: 'void main() { gl_FragColor = vec4(1.0); }',
+                shaderParams: { uP_speed: 0.8, uP_count: 16 },
+              },
+              blendMode: 'normal',
+              opacity: 1,
+              visible: true,
+            },
+          ],
+        },
+      ],
+    };
+    const file = serializeProject({ project: withShader, scenes: [], settings: { bpm: 120, loop: true } });
+    const parsed = parseProjectFile(projectFileToJson(file));
+    expect(parsed.project.surfaces[0].layers[0].source.shaderParams).toEqual({ uP_speed: 0.8, uP_count: 16 });
+  });
+
+  it('deserializeProject accepte un ProjectFile complet', () => {
+    const file = serializeProject({ project, scenes: [], settings: { bpm: 120, loop: true } });
+    const parsed = deserializeProject(file);
+    expect(parsed.id).toBe(project.id);
+    expect(parsed.surfaces).toHaveLength(1);
+  });
+
+  it('borne le BPM au chargement et rejette les versions <= 0', () => {
     const high = parseProjectFile(
       JSON.stringify({ format: 'oneclicktomap', version: 1, project, settings: { bpm: 9000 } }),
     );
@@ -144,6 +219,6 @@ describe('projectFile', () => {
     expect(low.settings.bpm).toBe(20);
     expect(() =>
       parseProjectFile(JSON.stringify({ format: 'oneclicktomap', version: 0, project })),
-    ).toThrow(/non supportée/);
+    ).toThrow(/non support/);
   });
 });

@@ -5,6 +5,7 @@ import { useProjectStore } from '@/stores/projectStore';
 import { useOutputStore } from '@/stores/outputStore';
 import { useElementSize } from '@/ui/hooks/useElementSize';
 import { blendZonesToEdgeBlend } from '@/utils/edgeBlend';
+import { registerCanvas, onScreenshotRequest, onRecordRequest } from '@/utils/captureBus';
 import type { Surface } from '@/types';
 import { ControlPointsOverlay } from './ControlPointsOverlay';
 import { MaskOverlay } from './MaskOverlay';
@@ -27,6 +28,7 @@ function toStageSurfaces(surfaces: Surface[]): StageSurface[] {
         shaderCode: l.source.shaderCode,
         particles: l.source.particles,
         transform: l.transform,
+        shaderParams: l.source.shaderParams,
       })),
       mask: s.mask ? { enabled: s.mask.enabled, points: s.mask.points } : undefined,
       blend: blendZonesToEdgeBlend(s.blendZones),
@@ -49,6 +51,8 @@ export function StageCanvas() {
   const engineRef = useRef<Stage | null>(null);
   const cacheRef = useRef<MediaTextureCache | null>(null);
   const resyncRef = useRef<() => void>(() => {});
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
 
   const surfaces = useProjectStore((s) => s.project.surfaces);
   const selectedSurfaceId = useProjectStore((s) => s.selectedSurfaceId);
@@ -56,7 +60,6 @@ export function StageCanvas() {
   const targetDisplayId = useOutputStore((s) => s.targetDisplayId);
   const displays = useOutputStore((s) => s.displays);
 
-  // Le cadre adopte le ratio de l'écran de sortie EFFECTIF (cf. Phase 1).
   const stageSize = useElementSize(stageRef);
   const autoDisplay = displays.find((d) => !d.primary) ?? displays.find((d) => d.primary);
   const target = displays.find((d) => d.id === targetDisplayId) ?? autoDisplay;
@@ -71,10 +74,12 @@ export function StageCanvas() {
     frameWidth = stageSize.height * aspect;
   }
 
+  // Cycle de vie du moteur Three.js.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
+    registerCanvas(canvas);
     const engine = new Stage(canvas);
     engine.setShowOutlines(true);
     const cache = new MediaTextureCache(() => resyncRef.current());
@@ -95,6 +100,8 @@ export function StageCanvas() {
         kind: source.kind,
         dataUrl: source.dataUrl,
         deviceId: source.deviceId,
+        streamUrl: source.streamUrl,
+        textParams: source.textParams,
       });
     };
 
@@ -103,11 +110,15 @@ export function StageCanvas() {
       engine.sync(toStageSurfaces(state.project.surfaces), state.selectedSurfaceId, resolve);
     };
 
+    // Tick par frame : met à jour les textures vidéo (cf. MediaTextureCache.update).
+    engine.onFrameTick = () => cache.update();
+
     engineRef.current = engine;
     cacheRef.current = cache;
     resyncRef.current();
 
     return () => {
+      registerCanvas(null);
       engine.dispose();
       cache.dispose();
       engineRef.current = null;
@@ -115,13 +126,80 @@ export function StageCanvas() {
     };
   }, []);
 
+  // Sync surfaces.
   useEffect(() => {
     cacheRef.current?.prune(activeMediaKeys(surfaces));
     resyncRef.current();
   }, [surfaces, selectedSurfaceId]);
 
+  // A6 : screenshot via le bus de capture.
+  useEffect(() => {
+    return onScreenshotRequest(async (canvas) => {
+      const dataUrl = canvas.toDataURL('image/png');
+      const base64 = dataUrl.replace(/^data:image\/png;base64,/, '');
+      const result = await window.oneClickToMap?.saveScreenshot(base64);
+      if (result && !result.ok && !result.canceled) {
+        console.error('[screenshot]', result.error);
+      }
+    });
+  }, []);
+
+  // A5 : capture vidéo via le bus de capture.
+  useEffect(() => {
+    return onRecordRequest((canvas, action) => {
+      if (action === 'start') {
+        if (recorderRef.current) return; // déjà en cours
+        const stream = canvas.captureStream(30);
+        const recorder = new MediaRecorder(stream, { mimeType: 'video/webm;codecs=vp9' });
+        chunksRef.current = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunksRef.current.push(e.data);
+        };
+        recorder.onstop = () => {
+          const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+          const reader = new FileReader();
+          reader.onload = async () => {
+            const base64 = (reader.result as string).replace(/^data:video\/webm;base64,/, '');
+            const result = await window.oneClickToMap?.saveCapture(base64);
+            if (result && !result.ok && !result.canceled) {
+              console.error('[capture]', result.error);
+            }
+          };
+          reader.readAsDataURL(blob);
+          recorderRef.current = null;
+        };
+        recorder.start(200); // chunk toutes les 200ms
+        recorderRef.current = recorder;
+      } else if (action === 'stop') {
+        recorderRef.current?.stop();
+      }
+    });
+  }, []);
+
+  // A2 : drag-and-drop de fichiers sur le canvas → ajout à la bibliothèque de médias.
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    const { selectedSurfaceId: sid } = useProjectStore.getState();
+    if (!sid) return;
+    Array.from(e.dataTransfer.files).forEach((file) => {
+      if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const kind = file.type.startsWith('image/') ? 'image' : 'video';
+          useProjectStore.getState().addLayer(sid, { kind, dataUrl: reader.result as string }, file.name);
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+  };
+
   return (
-    <div ref={stageRef} className="stage">
+    <div ref={stageRef} className="stage" onDragOver={handleDragOver} onDrop={handleDrop}>
       <div
         className="stage-frame"
         style={{ width: `${Math.round(frameWidth)}px`, height: `${Math.round(frameHeight)}px` }}

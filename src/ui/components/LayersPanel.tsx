@@ -1,12 +1,35 @@
+import { useState } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import type { BlendMode } from '@/types';
 
+// A4 : tous les blend modes (Phase 2 + Phase 9)
 const BLEND_LABELS: Record<BlendMode, string> = {
   normal: 'Normal',
   add: 'Addition',
   multiply: 'Multiplier',
-  screen: 'Écran',
+  screen: 'Ecran',
+  overlay: 'Incrustation',
+  softlight: 'Lumiere tamisee',
+  difference: 'Difference',
+  colordodge: 'Eclaircir',
 };
+
+/** G2 : indicateur de chargement pour les calques video/webcam/stream. */
+function LoadingBadge({ kind, layerId }: { kind: string; layerId: string }) {
+  // La classe CSS '.layer-loading' est affichee seulement pour les types a chargement async.
+  const needsIndicator = kind === 'video' || kind === 'webcam' || kind === 'stream';
+  if (!needsIndicator) return null;
+  return (
+    <span
+      className="layer-loading"
+      data-layer-id={layerId}
+      title="Chargement..."
+      aria-label="Chargement en cours"
+    >
+      ⏳
+    </span>
+  );
+}
 
 export function LayersPanel() {
   const surfaces = useProjectStore((s) => s.project.surfaces);
@@ -20,6 +43,13 @@ export function LayersPanel() {
   const setLayerOpacityTransient = useProjectStore((s) => s.setLayerOpacityTransient);
   const beginDrag = useProjectStore((s) => s.beginDrag);
   const endDrag = useProjectStore((s) => s.endDrag);
+  // C4 / C6 : ajout de nouveaux types
+  const addTextLayer = useProjectStore((s) => s.addTextLayer);
+  const addStreamLayer = useProjectStore((s) => s.addStreamLayer);
+
+  // C6 : saisie d'URL de flux
+  const [streamUrl, setStreamUrl] = useState('');
+  const [showStreamInput, setShowStreamInput] = useState(false);
 
   const surface = surfaces.find((s) => s.id === selectedSurfaceId);
   if (!surface) {
@@ -35,9 +65,71 @@ export function LayersPanel() {
   // Affichage du haut (sommet de pile) vers le bas.
   const rows = surface.layers.map((layer, index) => ({ layer, index })).reverse();
 
+  const handleAddStream = () => {
+    const url = streamUrl.trim();
+    if (!url) return;
+    addStreamLayer(surface.id, url);
+    setStreamUrl('');
+    setShowStreamInput(false);
+  };
+
   return (
     <section className="panel">
-      <h2 className="panel-title">Calques · {surface.name}</h2>
+      <div className="panel-head">
+        <h2 className="panel-title">Calques · {surface.name}</h2>
+        <div className="panel-head-actions">
+          {/* C4 */}
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => addTextLayer(surface.id)}
+            title="Ajouter un calque texte"
+            aria-label="Calque texte"
+          >
+            T
+          </button>
+          {/* C6 */}
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setShowStreamInput((v) => !v)}
+            title="Ajouter un flux HLS/RTSP"
+            aria-label="Calque flux"
+            aria-expanded={showStreamInput}
+          >
+            📡
+          </button>
+        </div>
+      </div>
+
+      {/* C6 : saisie d'URL */}
+      {showStreamInput && (
+        <div className="stream-input-row">
+          <input
+            type="url"
+            className="stream-url-input"
+            placeholder="https://… ou rtsp://…"
+            value={streamUrl}
+            onChange={(e) => setStreamUrl(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') handleAddStream();
+              if (e.key === 'Escape') setShowStreamInput(false);
+            }}
+            aria-label="URL du flux"
+            autoFocus
+          />
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={handleAddStream}
+            disabled={!streamUrl.trim()}
+            aria-label="Ajouter le flux"
+          >
+            ✓
+          </button>
+        </div>
+      )}
+
       <ul className="layer-list">
         {rows.map(({ layer, index }) => (
           <li
@@ -61,6 +153,8 @@ export function LayersPanel() {
               >
                 {layer.name}
               </button>
+              {/* G2 : indicateur de chargement */}
+              <LoadingBadge kind={layer.source.kind} layerId={layer.id} />
               <button
                 type="button"
                 className="icon-btn"
@@ -119,7 +213,7 @@ export function LayersPanel() {
                 onPointerUp={() => endDrag()}
                 onKeyUp={() => endDrag()}
                 onBlur={() => endDrag()}
-                title={`Opacité ${Math.round(layer.opacity * 100)}%`}
+                title={`Opacite ${Math.round(layer.opacity * 100)}%`}
                 aria-label="Opacité"
               />
             </div>

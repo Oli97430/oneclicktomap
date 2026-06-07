@@ -24,6 +24,10 @@ function toOutputSurfaces(surfaces: Surface[]): OutputSurfaceState[] {
         deviceId: l.source.deviceId,
         particles: l.source.particles,
         transform: l.transform,
+        // C6 : flux HLS/RTSP
+        streamUrl: l.source.streamUrl,
+        // D2 : valeurs des uniforms exposés
+        shaderParams: l.source.shaderParams,
       })),
       mask: s.mask ? { enabled: s.mask.enabled, points: s.mask.points } : undefined,
       blend: blendZonesToEdgeBlend(s.blendZones),
@@ -64,6 +68,7 @@ export function useOutputSync(): void {
       s.layers.flatMap((l) => {
         if (l.source.kind === 'image' || l.source.kind === 'video') return [l.id];
         if (l.source.kind === 'generative') return [`${l.id}:${l.source.shaderCode ?? ''}`];
+        if (l.source.kind === 'stream') return [`${l.id}:stream:${l.source.streamUrl ?? ''}`];
         return [];
       }),
     )

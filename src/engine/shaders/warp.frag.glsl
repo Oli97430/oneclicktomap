@@ -18,6 +18,9 @@ uniform vec2 uLayerOffset;
 uniform float uLayerScale;
 uniform float uLayerRot;
 uniform float uLayerAspect;
+// A4 : ajustement de couleur pour les modes de fusion avancés.
+// 0=aucun, 4=overlay, 5=softlight, 7=colordodge.
+uniform int uBlendModeAdj;
 varying vec3 vUvq;
 varying vec2 vWorld;
 
@@ -40,12 +43,30 @@ vec2 layerContentUv(vec2 uv) {
   return p + vec2(0.5);
 }
 
+// Ajustement de la couleur source pour les modes overlay / softlight / colordodge.
+// Aucune lecture du framebuffer : ces approximations fonctionnent bien sur
+// fond sombre (scénario typique de la projection mapping).
+vec3 blendAdjustOutput(vec3 c) {
+  if (uBlendModeAdj == 4) { // overlay — courbe en S (contraste)
+    vec3 s = step(vec3(0.5), c);
+    return mix(2.0 * c * c, 1.0 - 2.0 * (1.0 - c) * (1.0 - c), s);
+  }
+  if (uBlendModeAdj == 5) { // softlight — gamma doux
+    return pow(max(c, 0.001), vec3(0.65));
+  }
+  if (uBlendModeAdj == 7) { // colordodge — amplification agressive
+    return min(c * 4.0, 1.0);
+  }
+  return c;
+}
+
 void main() {
   vec2 suv = vUvq.xy / vUvq.z;          // espace surface (edge blending + masque)
   vec2 cuv = layerContentUv(suv);        // espace contenu (échantillonnage texture)
   // Hors du cadre [0,1] du contenu transformé : pixel transparent.
   float inBounds = step(0.0, cuv.x) * step(cuv.x, 1.0) * step(0.0, cuv.y) * step(cuv.y, 1.0);
   vec4 tex = texture2D(uMap, clamp(cuv, 0.0, 1.0));
+  tex.rgb = blendAdjustOutput(tex.rgb);
   // Atténuation d'edge-blending (en espace surface, pour recouvrement projecteurs).
   float edge = edgeFactor(suv.x, uBlendSize.x, uBlendGamma.x) *
     edgeFactor(1.0 - suv.x, uBlendSize.y, uBlendGamma.y) *
