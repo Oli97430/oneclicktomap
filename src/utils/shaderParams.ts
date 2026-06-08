@@ -1,15 +1,25 @@
 /**
- * D2 - Parsing des parametres de shader GLSL exposes en UI.
+ * D2 - Définition et parsing des paramètres de shader GLSL exposés en UI.
  *
- * Convention de declaration dans le code GLSL :
+ * Convention de déclaration dans le code GLSL :
  *   uniform float uP_speed;  // [0.0, 2.0, 0.5]  label: Vitesse
  *   uniform float uP_count;  // [1, 32, 8]        label: Nombre
  *
- * Format du commentaire : [min, max, default]  label: Libelle facultatif
- * Si le commentaire est absent, min=0 max=1 default=0.5.
+ * Format du commentaire : [min, max, default]  label: Libellé facultatif
+ * Si le commentaire est absent : min=0, max=1, default=0.5.
  */
 
-import type { ShaderParamDef } from '@/content/shaderPresets';
+/** Définition d'un uniform exposé en slider UI (D2 : shader params). */
+export interface ShaderParamDef {
+  /** Nom du uniform sans le préfixe « uP_ » (ex. "speed"). */
+  name: string;
+  uniformName: string; // "uP_speed"
+  label: string;
+  min: number;
+  max: number;
+  default: number;
+  step: number;
+}
 
 const UNIFORM_RE =
   /^\s*uniform\s+float\s+(uP_[\w]+)\s*;(?:\s*\/\/\s*\[([^\]]+)\](?:\s*label:\s*(.+))?)?/gm;

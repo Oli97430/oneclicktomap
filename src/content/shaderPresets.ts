@@ -8,8 +8,6 @@
  * injecté automatiquement avant le code par GenerativeTexture.
  */
 
-import type { ShaderParamDef } from '@/utils/shaderParams';
-
 export type PresetCategory = 'base' | 'audio' | 'avance';
 
 export interface ShaderPreset {
@@ -17,8 +15,6 @@ export interface ShaderPreset {
   name: string;
   category: PresetCategory;
   code: string;
-  /** @deprecated Utiliser parseShaderParams(preset.code) — gardé pour rétro-compat. */
-  params?: ShaderParamDef[];
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
