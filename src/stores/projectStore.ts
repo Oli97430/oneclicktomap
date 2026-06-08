@@ -306,6 +306,12 @@ interface ProjectStore extends HistoryState, SelectionState {
   setWarpMode: (surfaceId: string, mode: WarpMode) => void;
   setGridSize: (surfaceId: string, size: GridSize) => void;
   resetSurface: (surfaceId: string) => void;
+  /** H3 : bascule le verrou d'édition d'une surface. */
+  toggleSurfaceLock: (surfaceId: string) => void;
+  /** H1/MIDI/OSC : modifie l'opacité globale d'une surface sans historique. */
+  setSurfaceOpacityTransient: (surfaceId: string, opacity: number) => void;
+  /** H4 : configure la grille d'aimantation du projet. */
+  setSnapGrid: (grid: import('@/types').SnapGrid | undefined) => void;
 }
 
 // ─── Implémentation ───────────────────────────────────────────────────────────
@@ -828,6 +834,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
       });
       return commitStateLabeled(s, next, 'Réinitialiser surface');
     }),
+
+  // H3 : verrou de surface (historisé).
+  toggleSurfaceLock: (surfaceId) =>
+    set((s) =>
+      commitStateLabeled(
+        s,
+        mapSurface(s.project, surfaceId, (su) => ({ ...su, locked: !su.locked })),
+        'Verrouiller surface',
+      ),
+    ),
+
+  // H1/MIDI/OSC : opacité globale de surface sans historique.
+  setSurfaceOpacityTransient: (surfaceId, opacity) =>
+    set((s) => ({
+      project: mapSurface(s.project, surfaceId, (su) => ({ ...su, opacity })),
+    })),
+
+  // H4 : grille d'aimantation (historisé).
+  setSnapGrid: (grid) =>
+    set((s) =>
+      commitStateLabeled(s, { ...s.project, snapGrid: grid }, 'Grille d\'aimantation'),
+    ),
 }));
 
 // Ré-exporte commitState pour les tests (historyLabels.test etc.)

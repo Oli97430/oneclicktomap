@@ -22,7 +22,11 @@ export type ShortcutAction =
   | 'toggleMask'
   | 'addMaskPoint'
   | 'saveProject'
-  | 'openProject';
+  | 'openProject'
+  // Phase 10
+  | 'blackout'
+  | 'freeze'
+  | 'toggleSurfaceLock';
 
 /** Format d'un raccourci (ex : { key: 'z', ctrl: true }). */
 export interface Shortcut {
@@ -70,6 +74,10 @@ export const DEFAULT_SHORTCUTS: Record<ShortcutAction, Shortcut> = {
   addMaskPoint:       { key: 'Insert' },
   saveProject:        { key: 's', ctrl: true },
   openProject:        { key: 'o', ctrl: true },
+  // Phase 10
+  blackout:           { key: 'b' },
+  freeze:             { key: 'F2' },
+  toggleSurfaceLock:  { key: 'l' },
 };
 
 const STORAGE_KEY = 'ocm-shortcuts-v1';

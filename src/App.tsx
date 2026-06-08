@@ -13,10 +13,12 @@ import { MaskPanel } from '@/ui/components/MaskPanel';
 import { BlendPanel } from '@/ui/components/BlendPanel';
 import { useProjectStore } from '@/stores/projectStore';
 import { useSceneStore } from '@/stores/sceneStore';
+import { LivePanel } from '@/ui/components/LivePanel';
 import { useOutputSync } from '@/ui/hooks/useOutputSync';
 import { useKeyboardShortcuts } from '@/ui/hooks/useKeyboardShortcuts';
 import { useAudio } from '@/ui/hooks/useAudio';
 import { useTimelinePlayback } from '@/ui/hooks/useTimelinePlayback';
+import { useMidiMapping } from '@/ui/hooks/useMidiMapping';
 
 export default function App() {
   // Synchronise l'éditeur avec la fenêtre de sortie (si ouverte).
@@ -27,6 +29,8 @@ export default function App() {
   useAudio();
   // Lecture de la timeline (morph des surfaces entre scènes).
   useTimelinePlayback();
+  // H5 : écoute MIDI CC et dispatche vers les stores.
+  useMidiMapping();
 
   const resolution = useProjectStore((s) => s.project.resolution);
   const isFhd = resolution.width === 1920 && resolution.height === 1080;
@@ -47,6 +51,7 @@ export default function App() {
           <AudioPanel />
           <DetectionPanel />
           <TimelinePanel />
+          <LivePanel />
           <div className="sidebar-foot">
             Projet · {resolution.width} × {resolution.height}
             {isFhd ? ' · FHD' : ''}

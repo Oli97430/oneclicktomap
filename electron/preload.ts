@@ -4,7 +4,9 @@ import {
   type CalibrationPattern,
   type CaptureResult,
   type DisplayInfo,
+  type LiveState,
   type OneClickToMapApi,
+  type OscMessage,
   type OutputAssets,
   type OutputAudio,
   type OutputStatus,
@@ -88,6 +90,24 @@ const api: OneClickToMapApi = {
       callback(pattern);
     ipcRenderer.on(IPC.calibrationPattern, listener);
     return () => ipcRenderer.removeListener(IPC.calibrationPattern, listener);
+  },
+
+  // --- H1/H2 : état live (blackout, freeze) ---
+  sendLiveState: (state: LiveState): void =>
+    ipcRenderer.send(IPC.liveState, state),
+  onLiveState: (callback) => {
+    const listener = (_event: IpcRendererEvent, state: LiveState) => callback(state);
+    ipcRenderer.on(IPC.liveState, listener);
+    return () => ipcRenderer.removeListener(IPC.liveState, listener);
+  },
+
+  // --- H6 : OSC ---
+  oscListen: (port: number, enabled: boolean): void =>
+    ipcRenderer.send(IPC.oscListen, { port, enabled }),
+  onOscMessage: (callback) => {
+    const listener = (_event: IpcRendererEvent, msg: OscMessage) => callback(msg);
+    ipcRenderer.on(IPC.oscMessage, listener);
+    return () => ipcRenderer.removeListener(IPC.oscMessage, listener);
   },
 };
 

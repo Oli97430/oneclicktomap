@@ -84,8 +84,15 @@ function buildTextTexture(params: TextParams): THREE.Texture {
 export class MediaTextureCache {
   private readonly entries = new Map<string, Entry>();
   private disposed = false;
+  /** H2 : quand vrai, update() ne pousse plus de nouvelles frames (dernière frame figée). */
+  private frozen = false;
 
   constructor(private readonly onLoad: () => void) {}
+
+  /** H2 : active/désactive le freeze vidéo. */
+  setFrozen(on: boolean): void {
+    this.frozen = on;
+  }
 
   get(key: string, descriptor: MediaDescriptor): THREE.Texture | null {
     const sig = signature(descriptor);
@@ -222,6 +229,7 @@ export class MediaTextureCache {
    * Doit être appelé une fois par frame depuis la boucle de rendu.
    */
   update(): void {
+    if (this.frozen) return; // H2 : freeze — dernière frame figée
     for (const entry of this.entries.values()) {
       const video = entry.video;
       if (video && entry.texture && video.readyState >= video.HAVE_CURRENT_DATA) {

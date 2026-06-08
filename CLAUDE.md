@@ -158,6 +158,19 @@ Phase 9 — Améliorations (v0.5.0) : **terminée ✅**
 51. ✅ Timecode SMPTE (F1) — MTC (Web MIDI) + LTC (AudioWorklet biphase-mark) + sync timeline
 52. ✅ Chargement progressif vidéos (G2) — LoadingState dans MediaTextureCache, badge UI
 
+Phase 10 — Interopérabilité & Live Pro (v0.6.0) : **terminée ✅**
+53. ✅ Blackout global (H1) — touche B, overlay CSS instantané éditeur + projecteur (IPC liveState)
+54. ✅ Freeze vidéo (H2) — touche F2, MediaTextureCache.setFrozen() + broadcast IPC
+55. ✅ Surface lock (H3) — icône cadenas SurfaceList, guard ControlPointsOverlay, raccourci L
+56. ✅ Snap to grid (H4) — grille N×M configurable dans WarpControls, snapToGrid() pur TS
+57. ✅ MIDI CC mapping (H5) — useMidiMapping hook Web MIDI, mode Learn, MidiMappingStore
+58. ✅ OSC Input (H6) — serveur UDP dgram Electron, parseOscMessage, OscStore, LivePanel
+
+Architecture : `src/stores/liveStore.ts` (blackout/freeze) + `midiMappingStore.ts` + `oscStore.ts` ;
+`src/utils/snapGrid.ts` (pur, testé) ; OSC serveur Electron `dgram` + parseOscMessage dans `handlers.ts` ;
+`LivePanel.tsx` regroupe MIDI CC et OSC dans la sidebar. Live state (blackout/freeze) diffusé aux
+sorties via `IPC.liveState` dans `useOutputSync`. 26 suites de tests — 147/147 verts.
+
 ## Référence
 
 Voir `OneClickToMap-SPEC.md` pour les spécifications complètes, le modèle de données détaillé, et la roadmap.

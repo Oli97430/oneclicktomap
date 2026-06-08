@@ -3,7 +3,7 @@ import { Stage, type StageSurface, type TextureResolver } from '@/engine/Stage';
 import { MediaTextureCache } from '@/engine/MediaTextureCache';
 import { resetAudioFeatures, setAudioFeatures } from '@/content/audioBus';
 import type { EdgeBlend } from '@/utils/edgeBlend';
-import type { CalibrationPattern, OutputAssets, OutputLayer, OutputSurfaceState } from '../../../shared/contract';
+import type { CalibrationPattern, LiveState, OutputAssets, OutputLayer, OutputSurfaceState } from '../../../shared/contract';
 
 const toVec4 = (a: number[] | undefined, fallback: number): [number, number, number, number] => [
   a?.[0] ?? fallback,
@@ -55,6 +55,8 @@ export function OutputView() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // E1 : motif de calibration projete
   const [calibPattern, setCalibPattern] = useState<CalibrationPattern | null>(null);
+  // H1/H2 : état live reçu depuis l'éditeur via IPC
+  const [liveState, setLiveState] = useState<LiveState>({ blackout: false, freeze: false });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -85,6 +87,12 @@ export function OutputView() {
     stage.onFrameTick = () => cache.update();
 
     const api = window.oneClickToMap;
+
+    // H1/H2 : réception de l'état live depuis l'éditeur.
+    const offLive = api?.onLiveState((state) => {
+      setLiveState(state);
+      cache.setFrozen(state.freeze);
+    });
     const offSurfaces = api?.onOutputSurfaces((list) => {
       surfaces = list;
       const mine = list.filter((s) => (s.output ?? 0) === OUTPUT_INDEX);
@@ -125,6 +133,7 @@ export function OutputView() {
       offAssets?.();
       offAudio?.();
       offCalib?.();
+      offLive?.();
       resetAudioFeatures();
       cache.dispose();
       stage.dispose();
@@ -134,6 +143,8 @@ export function OutputView() {
   return (
     <>
       <canvas ref={canvasRef} className="output-canvas" />
+      {/* H1 : overlay blackout sortie */}
+      {liveState.blackout && <div className="blackout-overlay" aria-hidden="true" />}
       {/* E1 : surcouche de calibration - recouvre entierement le rendu */}
       {calibPattern && calibPattern.index >= 0 && (
         <img

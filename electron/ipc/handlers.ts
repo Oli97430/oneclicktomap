@@ -1,4 +1,5 @@
 import path from 'node:path';
+import dgram from 'node:dgram';
 import { promises as fs } from 'node:fs';
 import {
   app,
@@ -12,6 +13,8 @@ import {
   IPC,
   type CalibrationPattern,
   type CaptureResult,
+  type LiveState,
+  type OscMessage,
   type OpenResult,
   type RecentFilesResult,
   type SaveResult,
@@ -203,6 +206,70 @@ export function registerIpcHandlers({ output, getMainWindow }: IpcContext): void
     if (!fromEditor(event)) return;
     output.broadcast(IPC.calibrationPattern, pattern);
   });
+
+  // --- H1/H2 : état live (blackout, freeze) éditeur → sorties ---
+  ipcMain.on(IPC.liveState, (event, state: LiveState) => {
+    if (!fromEditor(event)) return;
+    output.broadcast(IPC.liveState, state);
+  });
+
+  // --- H6 : serveur OSC UDP (reçoit et relaie les messages au renderer) ---
+  let oscSocket: dgram.Socket | null = null;
+
+  ipcMain.on(IPC.oscListen, (event, { port, enabled }: { port: number; enabled: boolean }) => {
+    if (!fromEditor(event)) return;
+    if (oscSocket) {
+      try { oscSocket.close(); } catch { /* ignore */ }
+      oscSocket = null;
+    }
+    if (!enabled) return;
+
+    const socket = dgram.createSocket('udp4');
+    socket.on('message', (buf) => {
+      const msg = parseOscMessage(buf);
+      if (!msg) return;
+      const main = getMainWindow();
+      if (main && !main.isDestroyed()) main.webContents.send(IPC.oscMessage, msg);
+    });
+    socket.on('error', () => { oscSocket = null; });
+    socket.bind(port, '0.0.0.0');
+    oscSocket = socket;
+  });
+}
+
+/**
+ * Parseur OSC minimal : adresse + premiers arguments float/int.
+ * Supporte le sous-ensemble utilisé en pratique (QLab, TouchDesigner, etc.).
+ */
+function parseOscMessage(buf: Buffer): OscMessage | null {
+  // Adresse (chaîne terminée par \0, alignée sur 4 octets)
+  let i = 0;
+  while (i < buf.length && buf[i] !== 0) i++;
+  if (i === 0) return null;
+  const path = buf.subarray(0, i).toString('ascii');
+  i = Math.ceil((i + 1) / 4) * 4;
+
+  // Type tag (doit commencer par ',')
+  if (i >= buf.length || buf[i] !== 0x2c) return null;
+  let j = i;
+  while (j < buf.length && buf[j] !== 0) j++;
+  const types = buf.subarray(i + 1, j).toString('ascii');
+  j = Math.ceil((j + 1) / 4) * 4;
+
+  // Arguments float32 ou int32
+  const args: number[] = [];
+  for (const t of types) {
+    if (t === 'f') {
+      if (j + 4 > buf.length) break;
+      args.push(buf.readFloatBE(j));
+      j += 4;
+    } else if (t === 'i') {
+      if (j + 4 > buf.length) break;
+      args.push(buf.readInt32BE(j));
+      j += 4;
+    }
+  }
+  return { path, args };
 }
 
 /** Horodatage court pour les noms de fichiers (pas de Date.now dans les modules Electron). */

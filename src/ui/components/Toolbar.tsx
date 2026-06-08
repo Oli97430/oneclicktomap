@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
+import { useLiveStore } from '@/stores/liveStore';
 import { openProjectFromFile, saveProjectToFile } from '@/io/projectActions';
 import { triggerScreenshot, triggerRecord } from '@/utils/captureBus';
 import { OutputControls } from './OutputControls';
@@ -31,6 +32,10 @@ export function Toolbar() {
   const canRedo = useProjectStore((s) => s.future.length > 0);
   const [recording, setRecording] = useState(false);
   const recent = useRecentFiles();
+  const blackout = useLiveStore((s) => s.blackout);
+  const freeze = useLiveStore((s) => s.freeze);
+  const toggleBlackout = useLiveStore((s) => s.toggleBlackout);
+  const toggleFreeze = useLiveStore((s) => s.toggleFreeze);
 
   const handleFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -80,7 +85,7 @@ export function Toolbar() {
           ◳
         </span>
         <span>OneClickToMap</span>
-        <span className="toolbar-badge">Phase 9</span>
+        <span className="toolbar-badge">Phase 10</span>
       </div>
 
       <div className="toolbar-actions">
@@ -188,6 +193,31 @@ export function Toolbar() {
           aria-pressed={recording}
         >
           {recording ? '⏹' : '⏺'}
+        </button>
+        <span className="toolbar-divider" />
+
+        {/* H1 : Blackout global (B) */}
+        <button
+          type="button"
+          onClick={toggleBlackout}
+          className={blackout ? 'toolbar-btn-active toolbar-btn-danger' : ''}
+          title={blackout ? 'Désactiver le blackout (B)' : 'Blackout global (B)'}
+          aria-label={blackout ? 'Désactiver blackout' : 'Blackout'}
+          aria-pressed={blackout}
+        >
+          ⬛
+        </button>
+
+        {/* H2 : Freeze vidéo (F2) */}
+        <button
+          type="button"
+          onClick={toggleFreeze}
+          className={freeze ? 'toolbar-btn-active' : ''}
+          title={freeze ? 'Désactiver le freeze (F2)' : 'Freeze vidéo (F2)'}
+          aria-label={freeze ? 'Désactiver freeze' : 'Freeze'}
+          aria-pressed={freeze}
+        >
+          ❄
         </button>
       </div>
 

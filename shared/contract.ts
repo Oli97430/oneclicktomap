@@ -142,6 +142,18 @@ export interface CalibrationPattern {
   imageData: string; // data URL PNG du motif
 }
 
+/** H1/H2 : état live diffusé éditeur → sorties (blackout, freeze). */
+export interface LiveState {
+  blackout: boolean;
+  freeze: boolean;
+}
+
+/** H6 : message OSC reçu par le serveur UDP Electron. */
+export interface OscMessage {
+  path: string;
+  args: number[];
+}
+
 export interface OneClickToMapApi {
   getDisplays: () => Promise<DisplayInfo[]>;
   /** Notifié quand des écrans sont (dé)connectés — ex. Miracast / AirPlay-écran. */
@@ -193,6 +205,16 @@ export interface OneClickToMapApi {
 
   // Côté éditeur : notifications d'ouverture/fermeture de la sortie.
   onOutputStatusChanged: (callback: (status: OutputStatus) => void) => () => void;
+
+  // --- H1/H2 : état live (blackout, freeze) éditeur → sorties ---
+  sendLiveState: (state: LiveState) => void;
+  onLiveState: (callback: (state: LiveState) => void) => () => void;
+
+  // --- H6 : OSC Input (écoute UDP, messages → renderer) ---
+  /** Démarre (enabled=true) ou arrête le serveur UDP OSC sur le port donné. */
+  oscListen: (port: number, enabled: boolean) => void;
+  /** Notifié quand un message OSC arrive. */
+  onOscMessage: (callback: (msg: OscMessage) => void) => () => void;
 }
 
 export const IPC = {
@@ -216,4 +238,8 @@ export const IPC = {
   saveCapture: 'capture:save',
   saveScreenshot: 'capture:screenshot',
   calibrationPattern: 'calibration:pattern',
+  // Phase 10
+  liveState: 'live:state',
+  oscListen: 'osc:listen',
+  oscMessage: 'osc:message',
 } as const;

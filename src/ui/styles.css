@@ -1557,3 +1557,160 @@ body.output-mode {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Phase 10 ─────────────────────────────────────────────────────────────── */
+
+/* H1 : overlay blackout (éditeur + sortie) */
+.blackout-overlay {
+  position: absolute;
+  inset: 0;
+  background: #000;
+  z-index: 9998;
+  pointer-events: none;
+}
+.output-canvas ~ .blackout-overlay { position: fixed; }
+
+/* H3 : surface verrouillée */
+.surface-row .icon-btn.is-active { color: #f59e0b; }
+
+/* H4 : grille snap dans WarpControls */
+.snap-grid-section {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+.snap-grid-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.snap-grid-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* H1 : bouton danger dans toolbar */
+.toolbar-btn-danger {
+  color: #f87171 !important;
+  border-color: #f87171 !important;
+}
+
+/* H5/H6 : panneau Live */
+.live-section {
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.live-section:last-child { border-bottom: none; }
+.live-section-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+.live-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  flex: 1;
+}
+
+/* H5 : MIDI CC mapping rows */
+.midi-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+.midi-learn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 2px 5px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.15s;
+}
+.midi-learn:hover { background: var(--bg-elevated); }
+.midi-learn.is-learning { color: #facc15; border-color: #facc15; animation: pulse 0.8s ease infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.midi-select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 4px;
+  max-width: 90px;
+}
+.midi-cc {
+  width: 44px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 4px;
+  text-align: center;
+}
+.midi-param {
+  width: 76px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+/* H6 : OSC rows */
+.osc-port-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.osc-port-input {
+  width: 56px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 5px;
+  text-align: center;
+}
+.osc-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  user-select: none;
+  color: var(--text-dim);
+}
+.osc-toggle input[type=checkbox]:checked + * { color: #4ade80; }
+.osc-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: 5px;
+  flex-wrap: wrap;
+}
+.osc-path {
+  width: 120px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 2px 5px;
+}

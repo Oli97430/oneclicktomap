@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useOutputStore } from '@/stores/outputStore';
+import { useLiveStore } from '@/stores/liveStore';
 import { blendZonesToEdgeBlend } from '@/utils/edgeBlend';
 import type { Surface } from '@/types';
 import type { OutputAssets, OutputSurfaceState } from '../../../shared/contract';
@@ -55,6 +56,8 @@ function toAssets(surfaces: Surface[]): OutputAssets {
 export function useOutputSync(): void {
   const surfaces = useProjectStore((s) => s.project.surfaces);
   const setStatus = useOutputStore((s) => s.setStatus);
+  const blackout = useLiveStore((s) => s.blackout);
+  const freeze = useLiveStore((s) => s.freeze);
 
   // Géométrie + styles : à chaque changement (y compris glisser).
   useEffect(() => {
@@ -77,6 +80,11 @@ export function useOutputSync(): void {
     window.oneClickToMap?.sendOutputAssets(toAssets(useProjectStore.getState().project.surfaces));
   }, [assetsSig]);
 
+  // H1/H2 : diffuse l'état live (blackout, freeze) à chaque changement.
+  useEffect(() => {
+    window.oneClickToMap?.sendLiveState({ blackout, freeze });
+  }, [blackout, freeze]);
+
   useEffect(() => {
     const api = window.oneClickToMap;
     if (!api) return;
@@ -85,6 +93,9 @@ export function useOutputSync(): void {
       const current = useProjectStore.getState().project.surfaces;
       api.sendOutputSurfaces(toOutputSurfaces(current));
       api.sendOutputAssets(toAssets(current));
+      // Resync live state vers la sortie (cas reconnexion output).
+      const live = useLiveStore.getState();
+      api.sendLiveState({ blackout: live.blackout, freeze: live.freeze });
     });
     const offStatus = api.onOutputStatusChanged((status) => setStatus(status));
 

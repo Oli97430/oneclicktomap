@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
 import { useSceneStore } from '@/stores/sceneStore';
 import { useShortcutsStore, matchesShortcut } from '@/stores/shortcutsStore';
+import { useLiveStore } from '@/stores/liveStore';
 import { openProjectFromFile, saveProjectToFile } from '@/io/projectActions';
 
 /**
@@ -16,6 +17,8 @@ export function useKeyboardShortcuts(): void {
   const undo = useProjectStore((s) => s.undo);
   const redo = useProjectStore((s) => s.redo);
   const shortcuts = useShortcutsStore((s) => s.shortcuts);
+  const toggleBlackout = useLiveStore((s) => s.toggleBlackout);
+  const toggleFreeze = useLiveStore((s) => s.toggleFreeze);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -91,10 +94,23 @@ export function useKeyboardShortcuts(): void {
         event.preventDefault();
         const id = proj.selectedSurfaceId;
         if (id) proj.duplicateSurface(id);
+      } else if (matchesShortcut(event, shortcuts.blackout)) {
+        // H1 : blackout global
+        event.preventDefault();
+        toggleBlackout();
+      } else if (matchesShortcut(event, shortcuts.freeze)) {
+        // H2 : freeze vidéo
+        event.preventDefault();
+        toggleFreeze();
+      } else if (matchesShortcut(event, shortcuts.toggleSurfaceLock)) {
+        // H3 : verrouillage surface sélectionnée
+        event.preventDefault();
+        const id = proj.selectedSurfaceId;
+        if (id) proj.toggleSurfaceLock(id);
       }
     };
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [undo, redo, shortcuts]);
+  }, [undo, redo, shortcuts, toggleBlackout, toggleFreeze]);
 }

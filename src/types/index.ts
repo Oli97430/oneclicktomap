@@ -140,11 +140,20 @@ export interface Surface {
   opacity: number;
 }
 
+/** H4 — Grille d'aimantation configurable (espace normalisé [0,1]). */
+export interface SnapGrid {
+  enabled: boolean;
+  cols: number;
+  rows: number;
+}
+
 export interface Project {
   id: string;
   name: string;
   resolution: { width: number; height: number };
   surfaces: Surface[];
+  /** H4 : grille d'aimantation des points de contrôle. */
+  snapGrid?: SnapGrid;
 }
 
 /** Type de transition entrante d'une scène. */

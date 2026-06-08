@@ -12,6 +12,7 @@ export function SurfaceList() {
   const remove = useProjectStore((s) => s.removeSurface);
   const duplicate = useProjectStore((s) => s.duplicateSurface);
   const toggleVisible = useProjectStore((s) => s.toggleSurfaceVisible);
+  const toggleLock = useProjectStore((s) => s.toggleSurfaceLock);
   const setSurfaceOutput = useProjectStore((s) => s.setSurfaceOutput);
 
   const multiSelected = selectedSurfaceIds.length > 1;
@@ -89,6 +90,17 @@ export function SurfaceList() {
                   </option>
                 ))}
               </select>
+              {/* H3 : verrou d'édition */}
+              <button
+                type="button"
+                className={`icon-btn${surface.locked ? ' is-active' : ''}`}
+                onClick={() => toggleLock(surface.id)}
+                title={surface.locked ? 'Déverrouiller' : 'Verrouiller'}
+                aria-label={surface.locked ? 'Déverrouiller la surface' : 'Verrouiller la surface'}
+                aria-pressed={surface.locked}
+              >
+                {surface.locked ? '🔒' : '🔓'}
+              </button>
               <button
                 type="button"
                 className="icon-btn"

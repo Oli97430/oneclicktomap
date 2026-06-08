@@ -1,5 +1,5 @@
 import { useProjectStore } from '@/stores/projectStore';
-import type { WarpMode } from '@/types';
+import type { SnapGrid, WarpMode } from '@/types';
 
 const GRID_MIN = 1;
 const GRID_MAX = 8;
@@ -38,11 +38,20 @@ function Stepper({ label, value, onChange }: StepperProps) {
   );
 }
 
+const SNAP_MIN = 1;
+const SNAP_MAX = 32;
+const clampSnap = (v: number) => Math.max(SNAP_MIN, Math.min(SNAP_MAX, v));
+
 export function WarpControls() {
   const surfaces = useProjectStore((s) => s.project.surfaces);
   const selectedSurfaceId = useProjectStore((s) => s.selectedSurfaceId);
+  const snapGrid = useProjectStore((s) => s.project.snapGrid);
   const setWarpMode = useProjectStore((s) => s.setWarpMode);
   const setGridSize = useProjectStore((s) => s.setGridSize);
+  const setSnapGrid = useProjectStore((s) => s.setSnapGrid);
+
+  const sg: SnapGrid = snapGrid ?? { enabled: false, cols: 8, rows: 8 };
+  const updateSnap = (patch: Partial<SnapGrid>) => setSnapGrid({ ...sg, ...patch });
 
   const surface = surfaces.find((s) => s.id === selectedSurfaceId);
   if (!surface) {
@@ -101,6 +110,33 @@ export function WarpControls() {
           4 coins, correction de perspective. Passez en grille pour un maillage déformable.
         </p>
       )}
+
+      {/* H4 : Grille d'aimantation */}
+      <div className="snap-grid-section">
+        <label className="snap-grid-toggle">
+          <input
+            type="checkbox"
+            checked={sg.enabled}
+            onChange={(e) => updateSnap({ enabled: e.target.checked })}
+            aria-label="Activer la grille d'aimantation"
+          />
+          <span>Grille snap</span>
+        </label>
+        {sg.enabled && (
+          <div className="snap-grid-controls">
+            <Stepper
+              label="Col."
+              value={sg.cols}
+              onChange={(cols) => updateSnap({ cols: clampSnap(cols) })}
+            />
+            <Stepper
+              label="Lig."
+              value={sg.rows}
+              onChange={(rows) => updateSnap({ rows: clampSnap(rows) })}
+            />
+          </div>
+        )}
+      </div>
     </section>
   );
 }

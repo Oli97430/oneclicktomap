@@ -3,6 +3,7 @@ import { Stage, type StageSurface, type TextureResolver } from '@/engine/Stage';
 import { MediaTextureCache } from '@/engine/MediaTextureCache';
 import { useProjectStore } from '@/stores/projectStore';
 import { useOutputStore } from '@/stores/outputStore';
+import { useLiveStore } from '@/stores/liveStore';
 import { useElementSize } from '@/ui/hooks/useElementSize';
 import { blendZonesToEdgeBlend } from '@/utils/edgeBlend';
 import { registerCanvas, onScreenshotRequest, onRecordRequest } from '@/utils/captureBus';
@@ -59,6 +60,8 @@ export function StageCanvas() {
   const resolution = useProjectStore((s) => s.project.resolution);
   const targetDisplayId = useOutputStore((s) => s.targetDisplayId);
   const displays = useOutputStore((s) => s.displays);
+  const blackout = useLiveStore((s) => s.blackout);
+  const freeze = useLiveStore((s) => s.freeze);
 
   const stageSize = useElementSize(stageRef);
   const autoDisplay = displays.find((d) => !d.primary) ?? displays.find((d) => d.primary);
@@ -131,6 +134,11 @@ export function StageCanvas() {
     cacheRef.current?.prune(activeMediaKeys(surfaces));
     resyncRef.current();
   }, [surfaces, selectedSurfaceId]);
+
+  // H2 : freeze — propage au cache de textures.
+  useEffect(() => {
+    cacheRef.current?.setFrozen(freeze);
+  }, [freeze]);
 
   // A6 : screenshot via le bus de capture.
   useEffect(() => {
@@ -205,6 +213,8 @@ export function StageCanvas() {
         style={{ width: `${Math.round(frameWidth)}px`, height: `${Math.round(frameHeight)}px` }}
       >
         <canvas ref={canvasRef} className="stage-canvas" />
+        {/* H1 : overlay blackout éditeur */}
+        {blackout && <div className="blackout-overlay" aria-hidden="true" />}
         <ControlPointsOverlay />
         <LayerTransformOverlay />
         <MaskOverlay />

@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent, type PointerEvent } from 'react';
 import { CONTROL_POINT_LABELS, useProjectStore } from '@/stores/projectStore';
+import { snapToGrid } from '@/utils/snapGrid';
 import type { Vec2 } from '@/types';
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
@@ -15,8 +16,11 @@ export function ControlPointsOverlay() {
   const nudge = useProjectStore((s) => s.nudgeControlPoint);
   const overlayRef = useRef<HTMLDivElement>(null);
 
+  const snapGrid = useProjectStore((s) => s.project.snapGrid);
+
   const surface = surfaces.find((s) => s.id === selectedSurfaceId);
-  if (!surface) return null;
+  // H3 : surface verrouillée → pas d'overlay de contrôle
+  if (!surface || surface.locked) return null;
 
   const isGrid = surface.warpMode === 'grid';
 
@@ -37,7 +41,9 @@ export function ControlPointsOverlay() {
 
   const handlePointerMove = (event: PointerEvent<HTMLButtonElement>, index: number) => {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    updateTransient(surface.id, index, positionFromEvent(event.clientX, event.clientY));
+    // H4 : aimantation à la grille si activée
+    const raw = positionFromEvent(event.clientX, event.clientY);
+    updateTransient(surface.id, index, snapToGrid(raw, snapGrid));
   };
 
   const handlePointerUp = (event: PointerEvent<HTMLButtonElement>) => {

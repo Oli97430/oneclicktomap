@@ -28,6 +28,9 @@ const ACTION_LABELS: Record<ShortcutAction, string> = {
   addMaskPoint: 'Ajouter point masque',
   saveProject: 'Enregistrer projet',
   openProject: 'Ouvrir projet',
+  blackout: 'Blackout global',
+  freeze: 'Freeze video',
+  toggleSurfaceLock: 'Verrouiller surface',
 };
 
 export function ShortcutsPanel() {
