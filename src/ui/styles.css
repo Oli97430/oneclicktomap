@@ -523,30 +523,51 @@ body {
 }
 
 /* Generator (shaders) */
+.preset-category-group {
+  margin-bottom: 4px;
+}
+.preset-category-label {
+  margin: 6px 0 3px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
 .preset-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 4px;
+  gap: 3px;
 }
-
 .preset-btn {
   font: inherit;
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text);
   background: var(--bg-elevated);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 4px;
+  border-radius: 5px;
+  padding: 5px 4px;
   cursor: pointer;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
-
 .preset-btn:hover:not(:disabled) {
   border-color: var(--accent-strong);
+  background: #1e2d44;
 }
-
 .preset-btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+/* Teinte dorée pour les presets audio-réactifs */
+.preset-btn-audio {
+  border-color: #4a3f20;
+  color: #f0c060;
+}
+.preset-btn-audio:hover:not(:disabled) {
+  border-color: #f0c060;
+  background: #2a2010;
 }
 
 .shader-editor {
@@ -555,7 +576,6 @@ body {
   flex-direction: column;
   gap: 6px;
 }
-
 .shader-code {
   width: 100%;
   resize: vertical;
@@ -568,6 +588,28 @@ body {
   border-radius: 6px;
   padding: 8px;
   tab-size: 2;
+}
+.shader-code:focus { border-color: var(--accent); outline: none; }
+
+/* Pied de l'éditeur : bouton Appliquer + aide raccourcis */
+.shader-editor-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shader-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  opacity: 0.7;
+}
+/* Code non encore appliqué : bouton en orange */
+.panel-action.panel-action-dirty {
+  background: #7c4a00;
+  border-color: #f59e0b;
+  color: #fef3c7;
+}
+.panel-action.panel-action-dirty:hover {
+  background: #92540a;
 }
 
 .shader-error {
@@ -584,25 +626,29 @@ body {
   padding: 6px 8px;
 }
 
-/* Particle parameter rows */
+/* Particle controls */
+.particle-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+/* Param rows — partagé entre shader params et particules */
 .param-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
 }
-
 .param-row > span {
   font-size: 12px;
   color: var(--text);
 }
-
 .param-row input[type='range'] {
   flex: 1;
   min-width: 0;
   accent-color: var(--accent);
 }
-
 .param-row input[type='color'] {
   width: 36px;
   height: 24px;
@@ -1484,34 +1530,49 @@ body.output-mode {
   margin-top: 8px;
   display: flex;
   flex-direction: column;
+  gap: 5px;
+}
+.params-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
 }
 .params-title {
   font-size: 11px;
   color: var(--text-dim);
-  margin: 0 0 2px;
+  margin: 0;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
-.param-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
 .param-label {
   font-size: 11px;
   color: var(--text-dim);
-  min-width: 80px;
+  min-width: 72px;
+  flex-shrink: 0;
 }
-.param-row input[type='range'] { flex: 1; min-width: 0; }
 .param-value {
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
-  min-width: 36px;
+  min-width: 34px;
   text-align: right;
+  flex-shrink: 0;
 }
+/* Bouton ↺ individuel à côté de chaque slider */
+.param-reset-btn {
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.param-reset-btn:hover { opacity: 1; color: var(--accent); }
 
 /* E1 : calibration */
 .calib-progress {

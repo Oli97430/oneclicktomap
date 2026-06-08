@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { DynamicTexture } from './DynamicTexture';
 import type { AudioFeatures } from '@/content/audioBus';
+import { parseShaderParams } from '@/utils/shaderParams';
 
 export const GENERATIVE_VERT = `
 varying vec2 vUv;
@@ -80,6 +81,16 @@ export class GenerativeTexture implements DynamicTexture {
     });
     this.mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.material);
     this.scene.add(this.mesh);
+
+    // Initialise les uniforms uP_* depuis les annotations [min, max, default] du code.
+    // Garantit que les calques sauvegardés sans shaderParams affichent des valeurs
+    // sensées (notamment lors du chargement d'un projet existant ou d'un preset mis à jour).
+    const paramDefs = parseShaderParams(code);
+    for (const def of paramDefs) {
+      if (!(def.uniformName in this.material.uniforms)) {
+        this.material.uniforms[def.uniformName] = { value: def.default };
+      }
+    }
   }
 
   get texture(): THREE.Texture {

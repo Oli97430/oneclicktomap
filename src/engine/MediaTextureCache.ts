@@ -17,6 +17,8 @@ interface Entry {
   texture: THREE.Texture | null;
   video?: HTMLVideoElement;
   stream?: MediaStream;
+  /** URL blob créée via URL.createObjectURL — à révoquer à la libération (vidéo). */
+  blobUrl?: string;
   loadingState: LoadingState;
 }
 
@@ -129,28 +131,62 @@ export class MediaTextureCache {
 
     if (descriptor.kind === 'video') {
       if (!descriptor.dataUrl) return null;
+
       const video = document.createElement('video');
-      video.src = descriptor.dataUrl;
       video.loop = true;
       video.muted = true;
       video.playsInline = true;
-      video.crossOrigin = 'anonymous';
       video.preload = 'auto';
+      // Pas de crossOrigin pour les data/blob URLs : Chromium tenterait une
+      // requête CORS qui échoue silencieusement (ces schemes n'ont pas d'en-têtes
+      // CORS) et la vidéo ne se charge jamais.
+
       const entry: Entry = { sig, texture: null, video, loadingState: 'loading' };
       this.entries.set(key, entry);
-      // G2 : piste readyState pour l'indicateur de chargement.
-      const onReady = () => {
+
+      // G2 : démarre la lecture dès que le navigateur a décodé assez de données.
+      // On appelle play() ici (et non immédiatement) pour éviter le rejet de la
+      // Promise lorsque le navigateur n'a pas encore de données à décoder.
+      video.addEventListener('canplay', () => {
+        if (this.entries.get(key) !== entry) return;
         entry.loadingState = 'ready';
         this.onLoad();
-      };
-      video.addEventListener('canplay', onReady, { once: true });
+        void video.play().catch((err: unknown) => {
+          console.warn('[OCM] video.play() rejected:', err);
+        });
+      }, { once: true });
+
       video.addEventListener('error', () => {
-        if (this.entries.get(key) === entry) entry.loadingState = 'error';
+        if (this.entries.get(key) === entry) {
+          console.warn('[OCM] video load error:', video.error?.message);
+          entry.loadingState = 'error';
+        }
       });
+
+      // Convertit la data URL en Blob URL de façon asynchrone.
+      // Les grandes data URLs (MP4 base64 = ~133 % de la taille) ne se chargent
+      // pas de façon fiable via video.src= dans Electron/Chromium ; la Blob URL
+      // contourne ce problème sans bloquer le fil principal.
+      const dataUrl = descriptor.dataUrl;
+      fetch(dataUrl)
+        .then((r) => r.blob())
+        .then((blob) => {
+          if (this.entries.get(key) !== entry) return; // entrée déjà libérée
+          const url = URL.createObjectURL(blob);
+          entry.blobUrl = url;
+          video.src = url;
+          video.load();
+        })
+        .catch(() => {
+          // Fallback sur la data URL directe en cas d'échec du fetch
+          if (this.entries.get(key) !== entry) return;
+          video.src = dataUrl;
+          video.load();
+        });
+
       const texture = new THREE.VideoTexture(video);
       texture.colorSpace = THREE.SRGBColorSpace;
       entry.texture = texture;
-      void video.play().catch(() => {});
       return texture;
     }
 
@@ -267,8 +303,10 @@ export class MediaTextureCache {
       entry.video.removeAttribute('src');
       entry.video.load();
     }
+    if (entry.blobUrl) URL.revokeObjectURL(entry.blobUrl);
     entry.texture = null;
     entry.video = undefined;
     entry.stream = undefined;
+    entry.blobUrl = undefined;
   }
 }
