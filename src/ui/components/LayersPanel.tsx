@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { useProjectStore } from '@/stores/projectStore';
+import { getMediaStatus, subscribeMediaStatus } from '@/utils/mediaStatusBus';
 import type { BlendMode } from '@/types';
 
 // A4 : tous les blend modes (Phase 2 + Phase 9)
@@ -14,21 +15,38 @@ const BLEND_LABELS: Record<BlendMode, string> = {
   colordodge: 'Eclaircir',
 };
 
-/** G2 : indicateur de chargement pour les calques video/webcam/stream. */
+/** G2 : indicateur de statut réel pour les calques video/webcam/stream. */
 function LoadingBadge({ kind, layerId }: { kind: string; layerId: string }) {
-  // La classe CSS '.layer-loading' est affichee seulement pour les types a chargement async.
   const needsIndicator = kind === 'video' || kind === 'webcam' || kind === 'stream';
-  if (!needsIndicator) return null;
-  return (
-    <span
-      className="layer-loading"
-      data-layer-id={layerId}
-      title="Chargement..."
-      aria-label="Chargement en cours"
-    >
-      ⏳
-    </span>
+  // Hook appelé inconditionnellement (règle des hooks) ; ignoré si non pertinent.
+  const status = useSyncExternalStore(
+    subscribeMediaStatus,
+    () => getMediaStatus(layerId),
   );
+  if (!needsIndicator) return null;
+
+  if (status === 'error') {
+    const hint =
+      kind === 'video'
+        ? 'Échec de lecture — codec non supporté. Convertis la vidéo en MP4 (H.264) ou WebM (VP9).'
+        : kind === 'webcam'
+          ? 'Accès caméra refusé ou indisponible.'
+          : 'Flux indisponible (URL ou format).';
+    return (
+      <span className="layer-loading layer-status-error" data-layer-id={layerId} title={hint} aria-label={hint}>
+        ⚠️
+      </span>
+    );
+  }
+  if (status === 'loading') {
+    return (
+      <span className="layer-loading" data-layer-id={layerId} title="Chargement…" aria-label="Chargement en cours">
+        ⏳
+      </span>
+    );
+  }
+  // ready : pas d'indicateur (le contenu est visible).
+  return null;
 }
 
 export function LayersPanel() {

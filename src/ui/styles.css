@@ -1618,6 +1618,12 @@ body.output-mode {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+/* État d'erreur : pas d'animation, curseur d'aide pour révéler le tooltip. */
+.layer-loading.layer-status-error {
+  animation: none;
+  opacity: 1;
+  cursor: help;
+}
 
 /* ── Phase 10 ─────────────────────────────────────────────────────────────── */
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { TextParams } from '@/types';
+import { setMediaStatus, clearMediaStatus } from '@/utils/mediaStatusBus';
 
 export interface MediaDescriptor {
   kind: 'image' | 'video' | 'webcam' | 'text' | 'stream';
@@ -22,17 +23,83 @@ interface Entry {
   loadingState: LoadingState;
 }
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Conteneur DOM caché pour les éléments <video>.
+//
+// CAUSE RACINE du bug « les vidéos ne sont pas lues » : Chromium/Electron
+// suspend (ou throttle agressivement) le décodage des <video> qui ne sont PAS
+// attachés au document. `play()` peut résoudre mais `currentTime` n'avance pas,
+// donc aucune frame n'est jamais décodée → la VideoTexture reste noire, peu
+// importe combien de fois on force `needsUpdate`.
+//
+// On attache donc chaque <video> à un conteneur hors-écran (1px, invisible, mais
+// PAS `display:none` — ce qui re-suspendrait le décodage). Ce conteneur est un
+// singleton par renderer (éditeur ET fenêtre de sortie ont chacun le leur).
+// ──────────────────────────────────────────────────────────────────────────────
+let videoHost: HTMLDivElement | null = null;
+function getVideoHost(): HTMLDivElement {
+  if (!videoHost || !videoHost.isConnected) {
+    videoHost = document.createElement('div');
+    videoHost.setAttribute('aria-hidden', 'true');
+    videoHost.dataset.role = 'ocm-video-host';
+    // Hors-écran mais « rendu » : 1px, opacité nulle. display:none interdit.
+    videoHost.style.cssText =
+      'position:fixed;left:0;top:0;width:1px;height:1px;overflow:hidden;' +
+      'opacity:0;pointer-events:none;z-index:-1;';
+    document.body.appendChild(videoHost);
+  }
+  return videoHost;
+}
+
+/** Tente de lancer la lecture ; ignore le rejet (autoplay policy) sans casser. */
+function tryPlay(video: HTMLVideoElement): void {
+  const p = video.play();
+  if (p && typeof p.catch === 'function') {
+    p.catch((err: unknown) => {
+      console.warn('[OCM] video.play() rejected:', err);
+    });
+  }
+}
+
+/**
+ * Convertit une data URL en Blob de façon SYNCHRONE (décodage base64 manuel).
+ *
+ * On évite `fetch(dataUrl)` : sur une data URL de plusieurs Mo, dans le renderer
+ * sandboxé d'Electron, `fetch` peut échouer ou être bloqué par la politique de
+ * sécurité — ce qui laissait la vidéo se charger via une data URL géante directe
+ * (peu fiable) et aboutissait à un écran noir. Le décodage manuel est robuste.
+ */
+function dataUrlToBlob(dataUrl: string): Blob | null {
+  const comma = dataUrl.indexOf(',');
+  if (comma < 0) return null;
+  const header = dataUrl.slice(5, comma); // après "data:"
+  const isBase64 = /;base64$/i.test(header);
+  const mime = header.replace(/;base64$/i, '') || 'application/octet-stream';
+  const payload = dataUrl.slice(comma + 1);
+  try {
+    if (isBase64) {
+      const bin = atob(payload);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return new Blob([bytes], { type: mime });
+    }
+    return new Blob([decodeURIComponent(payload)], { type: mime });
+  } catch (err) {
+    console.warn('[OCM] dataUrlToBlob a échoué:', err);
+    return null;
+  }
+}
+
 // Signature légère (évite de comparer des data URLs de plusieurs Mo à chaque sync).
 function signature(d: MediaDescriptor): string {
   if (d.kind === 'text') {
-    // Hash rapide : contenu + quelques param visuels
     return `text:${d.textParams?.content ?? ''}:${d.textParams?.fontSize ?? 0}:${d.textParams?.color ?? ''}:${d.textParams?.fontFamily ?? ''}`;
   }
   if (d.kind === 'stream') return `stream:${d.streamUrl ?? ''}`;
   return `${d.kind}:${d.deviceId ?? ''}:${d.dataUrl ? d.dataUrl.length : 0}`;
 }
 
-/** Résolution : 1024 × 512 pour les calques texte. */
+/** Résolution : 1024 × 256 pour les calques texte. */
 const TEXT_W = 1024;
 const TEXT_H = 256;
 
@@ -42,11 +109,9 @@ function buildTextTexture(params: TextParams): THREE.Texture {
   const ctx = canvas.getContext('2d')!;
   ctx.clearRect(0, 0, TEXT_W, TEXT_H);
 
-  // Fond
   ctx.fillStyle = params.background || 'transparent';
   ctx.fillRect(0, 0, TEXT_W, TEXT_H);
 
-  // Texte
   const weight = params.bold ? 'bold ' : '';
   const style = params.italic ? 'italic ' : '';
   ctx.font = `${style}${weight}${params.fontSize}px ${params.fontFamily || 'sans-serif'}`;
@@ -61,9 +126,6 @@ function buildTextTexture(params: TextParams): THREE.Texture {
 
   lines.forEach((line, i) => ctx.fillText(line, x, startY + i * lineH));
 
-  // THREE.CanvasTexture n'accepte pas OffscreenCanvas directement sur tous les
-  // environnements — on passe par un ImageBitmap via createImageBitmap.
-  // Pour rester synchrone, on crée une canvas HTML classique comme fallback.
   const html = document.createElement('canvas');
   html.width = TEXT_W;
   html.height = TEXT_H;
@@ -94,6 +156,23 @@ export class MediaTextureCache {
   /** H2 : active/désactive le freeze vidéo. */
   setFrozen(on: boolean): void {
     this.frozen = on;
+  }
+
+  /** Prépare un <video> commun (vidéo / stream / webcam) et l'attache au DOM caché. */
+  private createVideoElement(): HTMLVideoElement {
+    const video = document.createElement('video');
+    video.muted = true;
+    video.defaultMuted = true;
+    video.volume = 0;
+    video.loop = true;
+    video.autoplay = true;
+    video.playsInline = true;
+    video.preload = 'auto';
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    // Attache au document : indispensable pour que Chromium décode les frames.
+    getVideoHost().appendChild(video);
+    return video;
   }
 
   get(key: string, descriptor: MediaDescriptor): THREE.Texture | null {
@@ -132,57 +211,42 @@ export class MediaTextureCache {
     if (descriptor.kind === 'video') {
       if (!descriptor.dataUrl) return null;
 
-      const video = document.createElement('video');
-      video.loop = true;
-      video.muted = true;
-      video.playsInline = true;
-      video.preload = 'auto';
-      // Pas de crossOrigin pour les data/blob URLs : Chromium tenterait une
-      // requête CORS qui échoue silencieusement (ces schemes n'ont pas d'en-têtes
-      // CORS) et la vidéo ne se charge jamais.
-
+      const video = this.createVideoElement();
       const entry: Entry = { sig, texture: null, video, loadingState: 'loading' };
       this.entries.set(key, entry);
+      setMediaStatus(key, 'loading');
 
-      // G2 : démarre la lecture dès que le navigateur a décodé assez de données.
-      // On appelle play() ici (et non immédiatement) pour éviter le rejet de la
-      // Promise lorsque le navigateur n'a pas encore de données à décoder.
-      video.addEventListener('canplay', () => {
+      // Lance la lecture dès que des données sont décodées. `loadeddata` arrive
+      // avant `canplay` ; on écoute les deux pour démarrer au plus tôt.
+      const start = () => {
         if (this.entries.get(key) !== entry) return;
         entry.loadingState = 'ready';
+        setMediaStatus(key, 'ready');
+        tryPlay(video);
         this.onLoad();
-        void video.play().catch((err: unknown) => {
-          console.warn('[OCM] video.play() rejected:', err);
-        });
-      }, { once: true });
-
+      };
+      video.addEventListener('loadeddata', start, { once: true });
+      video.addEventListener('canplay', start, { once: true });
       video.addEventListener('error', () => {
         if (this.entries.get(key) === entry) {
-          console.warn('[OCM] video load error:', video.error?.message);
+          console.warn('[OCM] échec de chargement vidéo (codec non supporté ?) :', video.error?.message ?? '(inconnu)');
           entry.loadingState = 'error';
+          setMediaStatus(key, 'error');
         }
       });
 
-      // Convertit la data URL en Blob URL de façon asynchrone.
-      // Les grandes data URLs (MP4 base64 = ~133 % de la taille) ne se chargent
-      // pas de façon fiable via video.src= dans Electron/Chromium ; la Blob URL
-      // contourne ce problème sans bloquer le fil principal.
-      const dataUrl = descriptor.dataUrl;
-      fetch(dataUrl)
-        .then((r) => r.blob())
-        .then((blob) => {
-          if (this.entries.get(key) !== entry) return; // entrée déjà libérée
-          const url = URL.createObjectURL(blob);
-          entry.blobUrl = url;
-          video.src = url;
-          video.load();
-        })
-        .catch(() => {
-          // Fallback sur la data URL directe en cas d'échec du fetch
-          if (this.entries.get(key) !== entry) return;
-          video.src = dataUrl;
-          video.load();
-        });
+      // data URL → Blob URL via décodage base64 SYNCHRONE (pas de fetch, cf.
+      // dataUrlToBlob). Indispensable pour les gros fichiers et le sandbox Electron.
+      const blob = dataUrlToBlob(descriptor.dataUrl);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        entry.blobUrl = url;
+        video.src = url;
+      } else {
+        // Dernier recours : data URL directe.
+        video.src = descriptor.dataUrl;
+      }
+      video.load();
 
       const texture = new THREE.VideoTexture(video);
       texture.colorSpace = THREE.SRGBColorSpace;
@@ -193,23 +257,31 @@ export class MediaTextureCache {
     // C6 : stream HLS / WebRTC (URL externe, Electron Chromium supporte .m3u8)
     if (descriptor.kind === 'stream') {
       if (!descriptor.streamUrl) return null;
-      const video = document.createElement('video');
-      video.src = descriptor.streamUrl;
+      const video = this.createVideoElement();
       video.loop = false;
-      video.muted = true;
-      video.playsInline = true;
-      video.crossOrigin = 'anonymous';
+      video.src = descriptor.streamUrl;
       const texture = new THREE.VideoTexture(video);
       texture.colorSpace = THREE.SRGBColorSpace;
       const entry: Entry = { sig, texture, video, loadingState: 'loading' };
       this.entries.set(key, entry);
-      video.addEventListener('canplay', () => {
+      setMediaStatus(key, 'loading');
+      const start = () => {
+        if (this.entries.get(key) !== entry) return;
+        entry.loadingState = 'ready';
+        setMediaStatus(key, 'ready');
+        tryPlay(video);
+        this.onLoad();
+      };
+      video.addEventListener('loadeddata', start, { once: true });
+      video.addEventListener('canplay', start, { once: true });
+      video.addEventListener('error', () => {
         if (this.entries.get(key) === entry) {
-          entry.loadingState = 'ready';
-          this.onLoad();
+          console.warn('[OCM] échec de chargement du flux :', video.error?.message ?? '(inconnu)');
+          entry.loadingState = 'error';
+          setMediaStatus(key, 'error');
         }
-      }, { once: true });
-      void video.play().catch(() => {});
+      });
+      video.load();
       return texture;
     }
 
@@ -223,14 +295,12 @@ export class MediaTextureCache {
     }
 
     // webcam
-    const video = document.createElement('video');
-    video.muted = true;
-    video.playsInline = true;
-    video.autoplay = true;
+    const video = this.createVideoElement();
     const texture = new THREE.VideoTexture(video);
     texture.colorSpace = THREE.SRGBColorSpace;
     const entry: Entry = { sig, texture, video, loadingState: 'loading' };
     this.entries.set(key, entry);
+    setMediaStatus(key, 'loading');
 
     const constraints: MediaStreamConstraints = {
       video: descriptor.deviceId ? { deviceId: { exact: descriptor.deviceId } } : true,
@@ -246,11 +316,15 @@ export class MediaTextureCache {
         entry.stream = stream;
         video.srcObject = stream;
         entry.loadingState = 'ready';
-        void video.play().catch(() => {});
+        setMediaStatus(key, 'ready');
+        tryPlay(video);
         this.onLoad();
       })
       .catch(() => {
-        if (this.entries.get(key) === entry) entry.loadingState = 'error';
+        if (this.entries.get(key) === entry) {
+          entry.loadingState = 'error';
+          setMediaStatus(key, 'error');
+        }
       });
     return texture;
   }
@@ -259,16 +333,21 @@ export class MediaTextureCache {
    * Tick par frame : force la mise à jour des textures vidéo (video/webcam/stream).
    *
    * THREE.VideoTexture ne marque `needsUpdate` que via `requestVideoFrameCallback`,
-   * qui n'est PAS déclenché de façon fiable pour un <video> détaché du DOM dans
-   * Electron/Chromium (l'élément n'étant jamais composité). On reproduit donc le
-   * fallback de Three : dès que la vidéo a des données, on réuploade la frame.
+   * qui n'est PAS déclenché de façon fiable pour un <video> dans Electron/Chromium.
+   * On reproduit le fallback de Three : dès que la vidéo a une nouvelle frame, on
+   * réuploade. On relance aussi la lecture si elle s'est arrêtée (sécurité).
    * Doit être appelé une fois par frame depuis la boucle de rendu.
    */
   update(): void {
     if (this.frozen) return; // H2 : freeze — dernière frame figée
     for (const entry of this.entries.values()) {
       const video = entry.video;
-      if (video && entry.texture && video.readyState >= video.HAVE_CURRENT_DATA) {
+      if (!video || !entry.texture) continue;
+      // Relance si la lecture s'est interrompue alors que des données existent.
+      if (video.paused && video.readyState >= video.HAVE_CURRENT_DATA && !video.ended) {
+        tryPlay(video);
+      }
+      if (video.readyState >= video.HAVE_CURRENT_DATA && video.videoWidth > 0) {
         entry.texture.needsUpdate = true;
       }
     }
@@ -284,12 +363,14 @@ export class MediaTextureCache {
       if (!activeKeys.has(key)) {
         this.disposeEntry(entry);
         this.entries.delete(key);
+        clearMediaStatus(key);
       }
     }
   }
 
   dispose(): void {
     this.disposed = true;
+    for (const key of this.entries.keys()) clearMediaStatus(key);
     for (const entry of this.entries.values()) this.disposeEntry(entry);
     this.entries.clear();
   }
@@ -302,6 +383,7 @@ export class MediaTextureCache {
       entry.video.srcObject = null;
       entry.video.removeAttribute('src');
       entry.video.load();
+      entry.video.remove(); // retire du conteneur DOM caché
     }
     if (entry.blobUrl) URL.revokeObjectURL(entry.blobUrl);
     entry.texture = null;
