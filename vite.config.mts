@@ -8,11 +8,22 @@ import glsl from 'vite-plugin-glsl';
 // eval) casserait avec cette politique : on ne l'injecte donc qu'au build.
 const PROD_CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // blob: requis pour l'AudioWorklet LTC (timecode F1), chargé via une blob URL
+  // (ctx.audioWorklet.addModule). Les worklets sont régis par script-src ; sans
+  // blob: le décodeur LTC est bloqué en prod (invisible en dev, sans CSP).
+  "script-src 'self' blob:",
+  // worker-src : Web Workers / Worklets éventuels (défense en profondeur).
+  "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob:",
+  // media-src : INDISPENSABLE pour les calques vidéo. Sans cette directive, les
+  // <video src="blob:…"> / "data:…" retombent sur default-src 'self' et sont
+  // bloqués par la CSP en build de prod → calque vidéo noir (invisible en dev,
+  // où aucune CSP n'est injectée). https : pour les flux HLS/RTSP distants (C6).
+  "media-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self'",
+  // data:/blob: pour fetch local (lecture de médias) ; https: pour les flux.
+  "connect-src 'self' data: blob: https:",
   "object-src 'none'",
   "base-uri 'self'",
   "frame-src 'none'",
