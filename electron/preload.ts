@@ -5,6 +5,7 @@ import {
   type CaptureResult,
   type DisplayInfo,
   type LiveState,
+  type DesktopSource,
   type OneClickToMapApi,
   type OscMessage,
   type OutputAssets,
@@ -12,6 +13,9 @@ import {
   type OutputStatus,
   type OutputSurfaceState,
   type RecentFilesResult,
+  type WebSourceError,
+  type WebSourceFrame,
+  type WebSourceOptions,
 } from '../shared/contract';
 
 // Pont sécurisé : le renderer n'a accès qu'à cette API typée, jamais à Node.
@@ -109,6 +113,25 @@ const api: OneClickToMapApi = {
     ipcRenderer.on(IPC.oscMessage, listener);
     return () => ipcRenderer.removeListener(IPC.oscMessage, listener);
   },
+
+  // --- Sources web (rendu hors-écran) ---
+  pickWebSource: () => ipcRenderer.invoke(IPC.pickWebSource),
+  startWebSource: (id: string, options: WebSourceOptions): void =>
+    ipcRenderer.send(IPC.webSourceStart, id, options),
+  stopWebSource: (id: string): void => ipcRenderer.send(IPC.webSourceStop, id),
+  onWebSourceFrame: (callback) => {
+    const listener = (_event: IpcRendererEvent, frame: WebSourceFrame) => callback(frame);
+    ipcRenderer.on(IPC.webSourceFrame, listener);
+    return () => ipcRenderer.removeListener(IPC.webSourceFrame, listener);
+  },
+  onWebSourceError: (callback) => {
+    const listener = (_event: IpcRendererEvent, error: WebSourceError) => callback(error);
+    ipcRenderer.on(IPC.webSourceError, listener);
+    return () => ipcRenderer.removeListener(IPC.webSourceError, listener);
+  },
+
+  // --- Capture de fenêtre / écran ---
+  getDesktopSources: (): Promise<DesktopSource[]> => ipcRenderer.invoke(IPC.getDesktopSources),
 };
 
 contextBridge.exposeInMainWorld('oneClickToMap', api);

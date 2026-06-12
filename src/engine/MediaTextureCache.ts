@@ -1,13 +1,18 @@
 import * as THREE from 'three';
 import type { TextParams } from '@/types';
 import { setMediaStatus, clearMediaStatus } from '@/utils/mediaStatusBus';
+import { subscribeWebFrame, subscribeWebError } from '@/utils/webSourceBus';
 
 export interface MediaDescriptor {
-  kind: 'image' | 'video' | 'webcam' | 'text' | 'stream';
+  kind: 'image' | 'video' | 'webcam' | 'text' | 'stream' | 'web' | 'window';
   dataUrl?: string;
   deviceId?: string;
   textParams?: TextParams;
   streamUrl?: string;
+  /** Pour web : chemin/URL de la page rendue hors-écran (clé de signature). */
+  webUrl?: string;
+  /** Pour window : identifiant desktopCapturer (écran/fenêtre). */
+  windowSourceId?: string;
 }
 
 /** État de chargement d'une entrée (G2 : progressive video loading). */
@@ -20,6 +25,8 @@ interface Entry {
   stream?: MediaStream;
   /** URL blob créée via URL.createObjectURL — à révoquer à la libération (vidéo). */
   blobUrl?: string;
+  /** Pour web : désabonnement du bus de frames hors-écran. */
+  unsub?: () => void;
   loadingState: LoadingState;
 }
 
@@ -96,7 +103,46 @@ function signature(d: MediaDescriptor): string {
     return `text:${d.textParams?.content ?? ''}:${d.textParams?.fontSize ?? 0}:${d.textParams?.color ?? ''}:${d.textParams?.fontFamily ?? ''}`;
   }
   if (d.kind === 'stream') return `stream:${d.streamUrl ?? ''}`;
+  if (d.kind === 'web') return `web:${d.webUrl ?? ''}`;
+  if (d.kind === 'window') return `window:${d.windowSourceId ?? ''}`;
   return `${d.kind}:${d.deviceId ?? ''}:${d.dataUrl ? d.dataUrl.length : 0}`;
+}
+
+/**
+ * Convertit une frame BGRA (origine haut-gauche, fournie par Electron) en RGBA
+ * retournée verticalement (origine bas-gauche) — pour s'aligner sur l'orientation
+ * des textures image (flipY) et apparaître à l'endroit. Écrit dans `dst`.
+ * Exporté pour les tests unitaires.
+ */
+export function bgraToRgbaFlipped(src: Uint8Array, dst: Uint8Array, w: number, h: number): void {
+  const need = w * h * 4;
+  if (src.length < need || dst.length < need) return;
+  // Chemin rapide 32 bits si l'alignement le permet.
+  if (src.byteOffset % 4 === 0) {
+    const s32 = new Uint32Array(src.buffer, src.byteOffset, w * h);
+    const d32 = new Uint32Array(dst.buffer, dst.byteOffset, w * h);
+    for (let y = 0; y < h; y += 1) {
+      const sRow = y * w;
+      const dRow = (h - 1 - y) * w;
+      for (let x = 0; x < w; x += 1) {
+        const v = s32[sRow + x]; // octets B,G,R,A (little-endian)
+        // R<->B : garde G (0x0000ff00) et A (0xff000000), permute R et B.
+        d32[dRow + x] = (v & 0xff00ff00) | ((v >>> 16) & 0xff) | ((v & 0xff) << 16);
+      }
+    }
+    return;
+  }
+  // Repli octet par octet (alignement non garanti).
+  for (let y = 0; y < h; y += 1) {
+    const sRow = y * w * 4;
+    const dRow = (h - 1 - y) * w * 4;
+    for (let x = 0; x < w * 4; x += 4) {
+      dst[dRow + x] = src[sRow + x + 2]; // R <- R
+      dst[dRow + x + 1] = src[sRow + x + 1]; // G
+      dst[dRow + x + 2] = src[sRow + x]; // B <- B(src position 0)
+      dst[dRow + x + 3] = src[sRow + x + 3]; // A
+    }
+  }
 }
 
 /** Résolution : 1024 × 256 pour les calques texte. */
@@ -294,6 +340,99 @@ export class MediaTextureCache {
       return texture;
     }
 
+    // Source web : DataTexture alimentée par les frames hors-écran (IPC).
+    if (descriptor.kind === 'web') {
+      if (!descriptor.webUrl) return null;
+      // Placeholder noir 2×2 ; redimensionné à la première frame.
+      const data = new Uint8Array(2 * 2 * 4);
+      const texture = new THREE.DataTexture(data, 2, 2, THREE.RGBAFormat);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.wrapS = THREE.ClampToEdgeWrapping;
+      texture.wrapT = THREE.ClampToEdgeWrapping;
+      texture.generateMipmaps = false;
+      texture.flipY = false; // ignoré pour DataTexture : on retourne déjà en CPU
+      texture.needsUpdate = true;
+      const entry: Entry = { sig, texture, loadingState: 'loading' };
+      this.entries.set(key, entry);
+      setMediaStatus(key, 'loading');
+
+      const offFrame = subscribeWebFrame(key, (frame) => {
+        if (this.frozen) return; // H2 : freeze
+        if (this.entries.get(key) !== entry || !entry.texture) return;
+        const { width: w, height: h } = frame;
+        if (w <= 0 || h <= 0) return;
+        const img = entry.texture.image as { data: Uint8Array; width: number; height: number };
+        if (img.width !== w || img.height !== h || img.data.length !== w * h * 4) {
+          img.data = new Uint8Array(w * h * 4);
+          img.width = w;
+          img.height = h;
+        }
+        bgraToRgbaFlipped(frame.data, img.data, w, h);
+        entry.texture.needsUpdate = true;
+        if (entry.loadingState !== 'ready') {
+          entry.loadingState = 'ready';
+          setMediaStatus(key, 'ready');
+          this.onLoad();
+        }
+      });
+      const offError = subscribeWebError(key, () => {
+        if (this.entries.get(key) !== entry) return;
+        entry.loadingState = 'error';
+        setMediaStatus(key, 'error');
+      });
+      entry.unsub = () => {
+        offFrame();
+        offError();
+      };
+      return texture;
+    }
+
+    // Capture de fenêtre / écran (desktopCapturer → getUserMedia → MediaStream).
+    if (descriptor.kind === 'window') {
+      if (!descriptor.windowSourceId) return null;
+      const video = this.createVideoElement();
+      video.loop = false;
+      const texture = new THREE.VideoTexture(video);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      const entry: Entry = { sig, texture, video, loadingState: 'loading' };
+      this.entries.set(key, entry);
+      setMediaStatus(key, 'loading');
+      // Contraintes non standard Electron (capture desktop) → cast nécessaire.
+      const desktopConstraints = {
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: descriptor.windowSourceId,
+          },
+        },
+      } as unknown as MediaStreamConstraints;
+      navigator.mediaDevices
+        ?.getUserMedia(desktopConstraints)
+        .then((stream) => {
+          if (this.disposed || this.entries.get(key) !== entry) {
+            stream.getTracks().forEach((t) => t.stop());
+            return;
+          }
+          entry.stream = stream;
+          video.srcObject = stream;
+          entry.loadingState = 'ready';
+          setMediaStatus(key, 'ready');
+          tryPlay(video);
+          this.onLoad();
+        })
+        .catch((err) => {
+          console.warn('[OCM] capture de fenêtre échouée :', err);
+          if (this.entries.get(key) === entry) {
+            entry.loadingState = 'error';
+            setMediaStatus(key, 'error');
+          }
+        });
+      return texture;
+    }
+
     // webcam
     const video = this.createVideoElement();
     const texture = new THREE.VideoTexture(video);
@@ -376,6 +515,7 @@ export class MediaTextureCache {
   }
 
   private disposeEntry(entry: Entry): void {
+    entry.unsub?.();
     entry.texture?.dispose();
     entry.stream?.getTracks().forEach((t) => t.stop());
     if (entry.video) {
@@ -390,5 +530,6 @@ export class MediaTextureCache {
     entry.video = undefined;
     entry.stream = undefined;
     entry.blobUrl = undefined;
+    entry.unsub = undefined;
   }
 }

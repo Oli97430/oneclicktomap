@@ -5,6 +5,7 @@ import { IPC } from '../shared/contract';
 import { registerIpcHandlers } from './ipc/handlers';
 import { listDisplays } from './services/displayService';
 import { OutputManager } from './services/outputManager';
+import { WebSourceManager } from './services/webSourceManager';
 
 // __dirname pointe vers dist-electron/ au runtime (build CJS).
 const DIST_ELECTRON = __dirname;
@@ -16,6 +17,7 @@ const DEV_SERVER_URL = process.env.VITE_DEV_SERVER_URL;
 
 let mainWindow: BrowserWindow | null = null;
 let output: OutputManager | null = null;
+let webSources: WebSourceManager | null = null;
 
 function broadcastDisplays(): void {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -76,9 +78,11 @@ function createMainWindow(): void {
   }
 
   mainWindow.on('closed', () => {
-    // L'éditeur est la fenêtre primaire : sa fermeture ferme aussi la sortie.
+    // L'éditeur est la fenêtre primaire : sa fermeture ferme aussi la sortie
+    // et toutes les sources web hors-écran.
     mainWindow = null;
     output?.close();
+    webSources?.stopAll();
   });
 }
 
@@ -96,7 +100,25 @@ void app.whenReady().then(() => {
     },
   });
 
-  registerIpcHandlers({ output, getMainWindow: () => mainWindow });
+  // Sources web hors-écran : diffuse chaque frame à l'éditeur ET aux sorties
+  // (chaque renderer la téléverse dans sa propre texture).
+  webSources = new WebSourceManager({
+    broadcast: (frame) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC.webSourceFrame, frame);
+      }
+      output?.broadcast(IPC.webSourceFrame, frame);
+    },
+    reportError: (id, description) => {
+      const payload = { id, description };
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(IPC.webSourceError, payload);
+      }
+      output?.broadcast(IPC.webSourceError, payload);
+    },
+  });
+
+  registerIpcHandlers({ output, webSources, getMainWindow: () => mainWindow });
   createMainWindow();
 
   // Écrans (dé)connectés (ex. Miracast / AirPlay-écran) : maj du sélecteur.
@@ -110,5 +132,10 @@ void app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  webSources?.stopAll();
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  webSources?.stopAll();
 });

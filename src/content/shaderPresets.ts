@@ -177,14 +177,24 @@ const AUDIO_PRESETS: ShaderPreset[] = [
     id: 'audio-bars',
     name: '♪ Spectre',
     category: 'audio',
-    code: `uniform float uP_gain;  // [0.5, 3.0, 1.6]  label: Gain
+    code: `uniform float uP_gain;  // [0.5, 4.0, 1.8]    label: Gain
+uniform float uP_bars;  // [3.0, 64.0, 32.0]  label: Barres
 void main() {
-  float x = vUv.x;
-  float band = x < 0.34 ? uBass : (x < 0.67 ? uMid : uTreble);
-  float h = clamp(band * uP_gain, 0.0, 1.0);
-  float m = step(1.0 - h, vUv.y);
-  vec3 col = hsv2rgb(vec3(0.6 - x * 0.45, 0.85, 1.0));
-  gl_FragColor = vec4(col * m, 1.0);
+  float bars = floor(uP_bars + 0.5);
+  float idx = floor(vUv.x * bars);
+  float fx = idx / max(bars - 1.0, 1.0);            // 0..1 sur le spectre
+  // Interpole basses -> mediums -> aigus sur la largeur.
+  float band = fx < 0.5 ? mix(uBass, uMid, fx * 2.0)
+                        : mix(uMid, uTreble, (fx - 0.5) * 2.0);
+  // Animation de repos : les barres restent visibles meme sans audio.
+  float idle = 0.05 + 0.04 * sin(uTime * 3.0 + idx * 0.6);
+  float h = clamp(band * uP_gain + idle, 0.0, 1.0);
+  float gap = step(0.12, fract(vUv.x * bars));      // espace entre les barres
+  float bar = step(1.0 - h, vUv.y) * gap;           // barres montant du bas
+  vec3 col = hsv2rgb(vec3(0.66 - fx * 0.5, 0.85, 1.0));
+  col *= mix(0.45, 1.0, vUv.y);                     // degrade vertical
+  float peak = smoothstep(0.03, 0.0, abs(vUv.y - (1.0 - h))) * gap; // ligne de crete
+  gl_FragColor = vec4(col * bar + vec3(1.0) * peak * 0.7, 1.0);
 }`,
   },
   {
@@ -253,7 +263,7 @@ void main() {
   vec2 p = vUv - 0.5;
   float angle = atan(p.y, p.x);
   float r = length(p);
-  float sectors = round(uP_slices);
+  float sectors = floor(uP_slices + 0.5);
   float a = mod(angle, 6.2832 / sectors);
   if (a > 3.1416 / sectors) a = 6.2832 / sectors - a;
   vec2 q = vec2(cos(a), sin(a)) * r * uP_zoom + 0.5;
@@ -280,19 +290,23 @@ void main() {
     id: 'matrix',
     name: 'Pluie matricielle',
     category: 'avance',
-    code: `uniform float uP_density;  // [4.0, 32.0, 12.0]  label: Densité
-uniform float uP_gspeed;   // [0.1, 3.0, 1.0]     label: Vitesse
+    code: `uniform float uP_density;  // [4.0, 40.0, 16.0]  label: Densité
+uniform float uP_gspeed;   // [0.1, 4.0, 1.2]     label: Vitesse
 void main() {
-  float cols = round(uP_density);
-  vec2 cell = vec2(floor(vUv.x * cols), vUv.y);
-  float offset = hash(vec2(cell.x, 0.0));
-  float drop = fract(offset * 5.13 + uTime * uP_gspeed * 0.4 * (0.5 + offset));
-  float head = smoothstep(0.0, 0.04, drop - (1.0 - cell.y)) *
-               smoothstep(0.0, 0.04, cell.y - (1.0 - drop));
-  float trail = smoothstep(0.0, 0.35, drop - (1.0 - cell.y)) * (1.0 - cell.y / drop);
-  float glyph = step(0.6, hash(vec2(cell.x, floor(cell.y * 24.0) + floor(uTime * 8.0))));
-  float bright = (head + trail * 0.4) * glyph;
-  gl_FragColor = vec4(0.0, bright, bright * 0.3, 1.0);
+  float cols = floor(uP_density + 0.5);
+  float colX = floor(vUv.x * cols);
+  float rnd = hash(vec2(colX, 1.7));
+  float speed = uP_gspeed * (0.4 + rnd * 0.9);
+  float d = 1.0 - vUv.y;                            // 0 en haut, 1 en bas
+  float head = fract(uTime * speed * 0.35 + rnd);   // tete qui descend
+  float behind = fract(head - d);                   // 0 a la tete, croit vers le haut
+  float fade = pow(1.0 - behind, 4.0);              // trainee qui s'estompe
+  float rows = cols * 1.8;
+  float cellY = floor(d * rows);
+  float glyph = step(0.5, hash(vec2(colX, cellY + floor(uTime * 9.0 * (0.5 + rnd)))));
+  vec3 col = vec3(0.0, 0.9, 0.25) * fade * glyph;                 // corps vert
+  col += vec3(0.75, 1.0, 0.8) * pow(1.0 - behind, 48.0) * glyph;  // tete claire
+  gl_FragColor = vec4(col, 1.0);
 }`,
   },
   {
@@ -303,7 +317,7 @@ void main() {
 uniform float uP_ny;  // [1.0, 8.0, 4.0]  label: Fréq Y
 void main() {
   vec2 p = vUv * 2.0 - 1.0;
-  float nx = round(uP_nx); float ny = round(uP_ny);
+  float nx = floor(uP_nx + 0.5); float ny = floor(uP_ny + 0.5);
   float phase = uTime * 0.3;
   float dist = 1.0;
   for (float i = 0.0; i < 6.0; i++) {

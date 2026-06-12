@@ -79,6 +79,8 @@ export function OutputView() {
         dataUrl: assets[layer.id],
         deviceId: out?.deviceId,
         streamUrl: out?.streamUrl,
+        webUrl: out?.webUrl,
+        windowSourceId: out?.windowSourceId,
       });
     };
     const resync = () => stage.sync(toStageSurfaces(surfaces, assets), null, resolve);
@@ -104,7 +106,8 @@ export function OutputView() {
             .flatMap((s) => s.layers)
             .filter((l) =>
               l.kind === 'image' || l.kind === 'video' || l.kind === 'webcam' ||
-              l.kind === 'text' || l.kind === 'stream'
+              l.kind === 'text' || l.kind === 'stream' || l.kind === 'web' ||
+              l.kind === 'window'
             )
             .map((l) => l.id),
         ),

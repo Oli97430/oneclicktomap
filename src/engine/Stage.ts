@@ -17,7 +17,17 @@ import { LAYER_TRANSFORM_IDENTITY } from '@/utils/layerTransform';
 
 export interface StageLayer {
   id: string;
-  kind: 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles' | 'text' | 'stream';
+  kind:
+    | 'pattern'
+    | 'image'
+    | 'video'
+    | 'webcam'
+    | 'generative'
+    | 'particles'
+    | 'text'
+    | 'stream'
+    | 'web'
+    | 'window';
   blendMode: BlendMode;
   opacity: number;
   visible: boolean;

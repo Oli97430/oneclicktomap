@@ -3,6 +3,7 @@ import dgram from 'node:dgram';
 import { promises as fs } from 'node:fs';
 import {
   app,
+  desktopCapturer,
   dialog,
   ipcMain,
   type BrowserWindow,
@@ -15,13 +16,17 @@ import {
   type CaptureResult,
   type LiveState,
   type OscMessage,
+  type DesktopSource,
   type OpenResult,
+  type PickWebSourceResult,
   type RecentFilesResult,
   type SaveResult,
   type Versions,
+  type WebSourceOptions,
 } from '../../shared/contract';
 import { listDisplays } from '../services/displayService';
 import type { OutputManager } from '../services/outputManager';
+import type { WebSourceManager } from '../services/webSourceManager';
 
 const PROJECT_FILTERS = [
   { name: 'Projet OneClickToMap', extensions: ['oneclicktomap'] },
@@ -30,10 +35,16 @@ const PROJECT_FILTERS = [
 
 interface IpcContext {
   output: OutputManager;
+  webSources: WebSourceManager;
   getMainWindow: () => BrowserWindow | null;
 }
 
-export function registerIpcHandlers({ output, getMainWindow }: IpcContext): void {
+const HTML_FILTERS = [
+  { name: 'Page web', extensions: ['html', 'htm'] },
+  { name: 'Tous les fichiers', extensions: ['*'] },
+];
+
+export function registerIpcHandlers({ output, webSources, getMainWindow }: IpcContext): void {
   // Validation de l'émetteur : les canaux directionnels n'acceptent que la
   // fenêtre attendue (défense en profondeur si un renderer était compromis).
   const fromEditor = (event: IpcMainEvent | IpcMainInvokeEvent): boolean =>
@@ -234,6 +245,58 @@ export function registerIpcHandlers({ output, getMainWindow }: IpcContext): void
     socket.on('error', () => { oscSocket = null; });
     socket.bind(port, '0.0.0.0');
     oscSocket = socket;
+  });
+
+  // --- Sources web (rendu hors-écran d'un fichier HTML / URL → texture) ---
+  ipcMain.handle(IPC.pickWebSource, async (event): Promise<PickWebSourceResult> => {
+    if (!fromEditor(event)) return { canceled: true };
+    const win = getMainWindow();
+    const options = {
+      title: 'Choisir une page web (HTML)',
+      properties: ['openFile' as const],
+      filters: HTML_FILTERS,
+    };
+    try {
+      const result = win
+        ? await dialog.showOpenDialog(win, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || result.filePaths.length === 0) return { canceled: true };
+      return { path: result.filePaths[0] };
+    } catch {
+      return { canceled: true };
+    }
+  });
+
+  ipcMain.on(IPC.webSourceStart, (event, id: string, options: WebSourceOptions) => {
+    if (!fromEditor(event) || typeof id !== 'string' || !options) return;
+    webSources.start(id, options);
+  });
+
+  ipcMain.on(IPC.webSourceStop, (event, id: string) => {
+    if (!fromEditor(event) || typeof id !== 'string') return;
+    webSources.stop(id);
+  });
+
+  // --- Capture de fenêtre / écran : liste des sources avec vignettes ---
+  ipcMain.handle(IPC.getDesktopSources, async (event): Promise<DesktopSource[]> => {
+    if (!fromEditor(event)) return [];
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['screen', 'window'],
+        thumbnailSize: { width: 320, height: 180 },
+        fetchWindowIcons: false,
+      });
+      return sources
+        .filter((s) => !s.thumbnail.isEmpty())
+        .map((s) => ({
+          id: s.id,
+          name: s.name,
+          thumbnail: s.thumbnail.toDataURL(),
+          kind: s.id.startsWith('screen') ? ('screen' as const) : ('window' as const),
+        }));
+    } catch {
+      return [];
+    }
   });
 }
 

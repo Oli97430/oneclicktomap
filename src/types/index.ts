@@ -32,7 +32,9 @@ export type LayerSourceKind =
   | 'generative'
   | 'particles'
   | 'text'
-  | 'stream';
+  | 'stream'
+  | 'web'
+  | 'window';
 
 export interface ParticleParams {
   count: number;
@@ -72,6 +74,17 @@ export interface LayerSource {
   streamUrl?: string;
   /** Pour generative : valeurs des uniforms exposés (uP_*). */
   shaderParams?: Record<string, number>;
+  /**
+   * Pour web : chemin d'un fichier HTML local ou URL http(s). Rendu hors-écran
+   * (BrowserWindow offscreen) dans le process principal, ses frames sont diffusées
+   * au renderer et téléversées dans une texture (calques WebGL/SuperSplat, etc.).
+   */
+  webUrl?: string;
+  /**
+   * Pour window : identifiant de source desktopCapturer (écran ou fenêtre d'app)
+   * capturé via getUserMedia → MediaStream → VideoTexture.
+   */
+  windowSourceId?: string;
 }
 
 /** Élément de la bibliothèque de médias (palette d'import). */

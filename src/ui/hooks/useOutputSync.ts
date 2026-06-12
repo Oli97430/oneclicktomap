@@ -29,6 +29,10 @@ function toOutputSurfaces(surfaces: Surface[]): OutputSurfaceState[] {
         streamUrl: l.source.streamUrl,
         // D2 : valeurs des uniforms exposés
         shaderParams: l.source.shaderParams,
+        // Source web (rendu hors-écran)
+        webUrl: l.source.webUrl,
+        // Capture de fenêtre / écran
+        windowSourceId: l.source.windowSourceId,
       })),
       mask: s.mask ? { enabled: s.mask.enabled, points: s.mask.points } : undefined,
       blend: blendZonesToEdgeBlend(s.blendZones),
@@ -72,6 +76,7 @@ export function useOutputSync(): void {
         if (l.source.kind === 'image' || l.source.kind === 'video') return [l.id];
         if (l.source.kind === 'generative') return [`${l.id}:${l.source.shaderCode ?? ''}`];
         if (l.source.kind === 'stream') return [`${l.id}:stream:${l.source.streamUrl ?? ''}`];
+        if (l.source.kind === 'web') return [`${l.id}:web:${l.source.webUrl ?? ''}`];
         return [];
       }),
     )

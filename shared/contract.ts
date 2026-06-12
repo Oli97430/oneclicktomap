@@ -57,7 +57,17 @@ export type OutputBlendMode =
 
 export interface OutputLayer {
   id: string;
-  kind: 'pattern' | 'image' | 'video' | 'webcam' | 'generative' | 'particles' | 'text' | 'stream';
+  kind:
+    | 'pattern'
+    | 'image'
+    | 'video'
+    | 'webcam'
+    | 'generative'
+    | 'particles'
+    | 'text'
+    | 'stream'
+    | 'web'
+    | 'window';
   blendMode: OutputBlendMode;
   opacity: number;
   visible: boolean;
@@ -77,6 +87,10 @@ export interface OutputLayer {
   streamUrl?: string;
   /** D2 : valeurs des uniforms exposés. */
   shaderParams?: Record<string, number>;
+  /** Pour web : chemin/URL de la source HTML rendue hors-écran. */
+  webUrl?: string;
+  /** Pour window : identifiant de source desktopCapturer (écran/fenêtre). */
+  windowSourceId?: string;
 }
 
 /** État de déformation d'une surface, synchronisé éditeur -> sortie (géométrie + styles). */
@@ -154,6 +168,48 @@ export interface OscMessage {
   args: number[];
 }
 
+/** Options de démarrage d'une source web (rendu hors-écran). */
+export interface WebSourceOptions {
+  /** Chemin de fichier HTML local OU URL http(s). */
+  url: string;
+  width?: number;
+  height?: number;
+  fps?: number;
+}
+
+/**
+ * Frame produite par une source web hors-écran, diffusée à toutes les fenêtres.
+ * `data` = pixels BGRA (origine haut-gauche), longueur width*height*4.
+ */
+export interface WebSourceFrame {
+  id: string;
+  width: number;
+  height: number;
+  data: Uint8Array;
+}
+
+/** Résultat du sélecteur de fichier HTML (source web). */
+export interface PickWebSourceResult {
+  canceled?: boolean;
+  path?: string;
+}
+
+/** Échec de chargement d'une source web (fichier introuvable, URL injoignable…). */
+export interface WebSourceError {
+  id: string;
+  description: string;
+}
+
+/** Source capturable du bureau (écran ou fenêtre d'application). */
+export interface DesktopSource {
+  id: string;
+  name: string;
+  /** Vignette PNG en data URL (aperçu dans le sélecteur). */
+  thumbnail: string;
+  /** 'screen' (écran complet) ou 'window' (fenêtre d'application). */
+  kind: 'screen' | 'window';
+}
+
 export interface OneClickToMapApi {
   getDisplays: () => Promise<DisplayInfo[]>;
   /** Notifié quand des écrans sont (dé)connectés — ex. Miracast / AirPlay-écran. */
@@ -215,6 +271,22 @@ export interface OneClickToMapApi {
   oscListen: (port: number, enabled: boolean) => void;
   /** Notifié quand un message OSC arrive. */
   onOscMessage: (callback: (msg: OscMessage) => void) => () => void;
+
+  // --- Sources web (rendu hors-écran d'un fichier HTML / URL → texture) ---
+  /** Ouvre un sélecteur de fichier HTML local pour créer une source web. */
+  pickWebSource: () => Promise<PickWebSourceResult>;
+  /** Démarre (ou reconfigure) une source web hors-écran identifiée par `id`. */
+  startWebSource: (id: string, options: WebSourceOptions) => void;
+  /** Arrête une source web et libère sa fenêtre hors-écran. */
+  stopWebSource: (id: string) => void;
+  /** Notifié à chaque frame d'une source web (toutes fenêtres). */
+  onWebSourceFrame: (callback: (frame: WebSourceFrame) => void) => () => void;
+  /** Notifié si une source web échoue au chargement (chemin/URL invalide). */
+  onWebSourceError: (callback: (error: WebSourceError) => void) => () => void;
+
+  // --- Capture de fenêtre / écran (calque 'window') ---
+  /** Liste les écrans et fenêtres capturables (avec vignettes). */
+  getDesktopSources: () => Promise<DesktopSource[]>;
 }
 
 export const IPC = {
@@ -242,4 +314,11 @@ export const IPC = {
   liveState: 'live:state',
   oscListen: 'osc:listen',
   oscMessage: 'osc:message',
+  // Sources web (rendu hors-écran)
+  pickWebSource: 'web:pick',
+  webSourceStart: 'web:start',
+  webSourceStop: 'web:stop',
+  webSourceFrame: 'web:frame',
+  webSourceError: 'web:error',
+  getDesktopSources: 'desktop:get-sources',
 } as const;

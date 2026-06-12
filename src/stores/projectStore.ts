@@ -269,6 +269,10 @@ interface ProjectStore extends HistoryState, SelectionState {
   addTextLayer: (surfaceId: string, params?: Partial<TextParams>) => void;
   /** C6 : ajoute un calque flux HLS/RTSP. */
   addStreamLayer: (surfaceId: string, url: string, name?: string) => void;
+  /** Ajoute un calque « source web » (HTML/URL rendu hors-écran). */
+  addWebLayer: (surfaceId: string, url: string, name?: string) => void;
+  /** Ajoute un calque « capture de fenêtre/écran » (desktopCapturer). */
+  addWindowLayer: (surfaceId: string, sourceId: string, name?: string) => void;
   removeLayer: (surfaceId: string, layerId: string) => void;
   moveLayer: (surfaceId: string, layerId: string, direction: 1 | -1) => void;
   setLayerBlend: (surfaceId: string, layerId: string, blendMode: BlendMode) => void;
@@ -558,6 +562,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         layers: [...su.layers, layer],
       }));
       return { ...commitStateLabeled(s, next, 'Ajouter calque flux'), selectedLayerId: layer.id };
+    }),
+
+  // Calque source web (HTML/URL rendu hors-écran).
+  addWebLayer: (surfaceId, url, name) =>
+    set((s) => {
+      const layer = createLayer(name ?? 'Page web', { kind: 'web', webUrl: url });
+      const next = mapSurface(s.project, surfaceId, (su) => ({
+        ...su,
+        layers: [...su.layers, layer],
+      }));
+      return { ...commitStateLabeled(s, next, 'Ajouter calque web'), selectedLayerId: layer.id };
+    }),
+
+  // Calque capture de fenêtre / écran (desktopCapturer).
+  addWindowLayer: (surfaceId, sourceId, name) =>
+    set((s) => {
+      const layer = createLayer(name ?? 'Fenêtre', { kind: 'window', windowSourceId: sourceId });
+      const next = mapSurface(s.project, surfaceId, (su) => ({
+        ...su,
+        layers: [...su.layers, layer],
+      }));
+      return { ...commitStateLabeled(s, next, 'Ajouter calque fenêtre'), selectedLayerId: layer.id };
     }),
 
   removeLayer: (surfaceId, layerId) =>
