@@ -13,6 +13,8 @@ export interface MediaDescriptor {
   webUrl?: string;
   /** Pour window : identifiant desktopCapturer (écran/fenêtre). */
   windowSourceId?: string;
+  /** Pour window : nom de la source (re-matching après redémarrage). */
+  windowName?: string;
 }
 
 /** État de chargement d'une entrée (G2 : progressive video loading). */
@@ -104,8 +106,21 @@ function signature(d: MediaDescriptor): string {
   }
   if (d.kind === 'stream') return `stream:${d.streamUrl ?? ''}`;
   if (d.kind === 'web') return `web:${d.webUrl ?? ''}`;
-  if (d.kind === 'window') return `window:${d.windowSourceId ?? ''}`;
+  if (d.kind === 'window') return `window:${d.windowSourceId ?? ''}:${d.windowName ?? ''}`;
   return `${d.kind}:${d.deviceId ?? ''}:${d.dataUrl ? d.dataUrl.length : 0}`;
+}
+
+/**
+ * Re-résout l'id de capture courant à partir du nom mémorisé (les ids
+ * desktopCapturer changent entre sessions). Renvoie null si introuvable.
+ */
+async function resolveWindowIdByName(name: string): Promise<string | null> {
+  try {
+    const sources = (await window.oneClickToMap?.getDesktopSources()) ?? [];
+    return sources.find((s) => s.name === name)?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -391,7 +406,7 @@ export class MediaTextureCache {
 
     // Capture de fenêtre / écran (desktopCapturer → getUserMedia → MediaStream).
     if (descriptor.kind === 'window') {
-      if (!descriptor.windowSourceId) return null;
+      if (!descriptor.windowSourceId && !descriptor.windowName) return null;
       const video = this.createVideoElement();
       video.loop = false;
       const texture = new THREE.VideoTexture(video);
@@ -399,37 +414,57 @@ export class MediaTextureCache {
       const entry: Entry = { sig, texture, video, loadingState: 'loading' };
       this.entries.set(key, entry);
       setMediaStatus(key, 'loading');
+
       // Contraintes non standard Electron (capture desktop) → cast nécessaire.
-      const desktopConstraints = {
-        audio: false,
-        video: {
-          mandatory: {
-            chromeMediaSource: 'desktop',
-            chromeMediaSourceId: descriptor.windowSourceId,
-          },
-        },
-      } as unknown as MediaStreamConstraints;
-      navigator.mediaDevices
-        ?.getUserMedia(desktopConstraints)
-        .then((stream) => {
-          if (this.disposed || this.entries.get(key) !== entry) {
-            stream.getTracks().forEach((t) => t.stop());
+      const captureWith = (sourceId: string): Promise<MediaStream> => {
+        if (!navigator.mediaDevices) return Promise.reject(new Error('mediaDevices indisponible'));
+        const constraints = {
+          audio: false,
+          video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } },
+        } as unknown as MediaStreamConstraints;
+        return navigator.mediaDevices.getUserMedia(constraints);
+      };
+      const onStream = (stream: MediaStream): void => {
+        if (this.disposed || this.entries.get(key) !== entry) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        entry.stream = stream;
+        video.srcObject = stream;
+        entry.loadingState = 'ready';
+        setMediaStatus(key, 'ready');
+        tryPlay(video);
+        this.onLoad();
+      };
+
+      // 1) id mémorisé (cas même session) ; 2) repli : re-matching par nom (les ids
+      // ne survivent pas au redémarrage). Erreur seulement si les deux échouent.
+      void (async () => {
+        if (descriptor.windowSourceId) {
+          try {
+            onStream(await captureWith(descriptor.windowSourceId));
             return;
+          } catch {
+            /* id périmé → re-matching par nom ci-dessous */
           }
-          entry.stream = stream;
-          video.srcObject = stream;
-          entry.loadingState = 'ready';
-          setMediaStatus(key, 'ready');
-          tryPlay(video);
-          this.onLoad();
-        })
-        .catch((err) => {
-          console.warn('[OCM] capture de fenêtre échouée :', err);
-          if (this.entries.get(key) === entry) {
-            entry.loadingState = 'error';
-            setMediaStatus(key, 'error');
+        }
+        if (descriptor.windowName) {
+          const reId = await resolveWindowIdByName(descriptor.windowName);
+          if (reId) {
+            try {
+              onStream(await captureWith(reId));
+              return;
+            } catch {
+              /* échec malgré le re-matching */
+            }
           }
-        });
+        }
+        console.warn('[OCM] capture de fenêtre indisponible (fenêtre fermée ?)');
+        if (this.entries.get(key) === entry) {
+          entry.loadingState = 'error';
+          setMediaStatus(key, 'error');
+        }
+      })();
       return texture;
     }
 

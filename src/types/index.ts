@@ -85,6 +85,12 @@ export interface LayerSource {
    * capturé via getUserMedia → MediaStream → VideoTexture.
    */
   windowSourceId?: string;
+  /**
+   * Pour window : nom de la fenêtre/écran capturé. Les ids desktopCapturer ne
+   * survivent pas au redémarrage ; on re-résout l'id courant par ce nom au
+   * chargement d'un projet (sinon repli sur l'id mémorisé → erreur si absent).
+   */
+  windowName?: string;
 }
 
 /** Élément de la bibliothèque de médias (palette d'import). */

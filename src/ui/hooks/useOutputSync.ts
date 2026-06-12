@@ -33,6 +33,7 @@ function toOutputSurfaces(surfaces: Surface[]): OutputSurfaceState[] {
         webUrl: l.source.webUrl,
         // Capture de fenêtre / écran
         windowSourceId: l.source.windowSourceId,
+        windowName: l.source.windowName,
       })),
       mask: s.mask ? { enabled: s.mask.enabled, points: s.mask.points } : undefined,
       blend: blendZonesToEdgeBlend(s.blendZones),

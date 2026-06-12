@@ -91,6 +91,8 @@ export interface OutputLayer {
   webUrl?: string;
   /** Pour window : identifiant de source desktopCapturer (écran/fenêtre). */
   windowSourceId?: string;
+  /** Pour window : nom de la source (re-matching après redémarrage). */
+  windowName?: string;
 }
 
 /** État de déformation d'une surface, synchronisé éditeur -> sortie (géométrie + styles). */

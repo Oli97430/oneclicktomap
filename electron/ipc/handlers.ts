@@ -49,7 +49,8 @@ export function registerIpcHandlers({ output, webSources, getMainWindow }: IpcCo
   // fenêtre attendue (défense en profondeur si un renderer était compromis).
   const fromEditor = (event: IpcMainEvent | IpcMainInvokeEvent): boolean =>
     event.sender === getMainWindow()?.webContents;
-  const fromOutput = (event: IpcMainEvent): boolean => output.isOutputSender(event.sender);
+  const fromOutput = (event: IpcMainEvent | IpcMainInvokeEvent): boolean =>
+    output.isOutputSender(event.sender);
 
   ipcMain.handle(IPC.getDisplays, () => listDisplays());
 
@@ -278,8 +279,11 @@ export function registerIpcHandlers({ output, webSources, getMainWindow }: IpcCo
   });
 
   // --- Capture de fenêtre / écran : liste des sources avec vignettes ---
+  // Autorisé à l'éditeur (sélecteur) ET aux sorties (re-matching d'un calque
+  // fenêtre par son nom au chargement d'un projet). Lister les fenêtres ouvertes
+  // n'est pas sensible et reste réservé à nos propres renderers.
   ipcMain.handle(IPC.getDesktopSources, async (event): Promise<DesktopSource[]> => {
-    if (!fromEditor(event)) return [];
+    if (!fromEditor(event) && !fromOutput(event)) return [];
     try {
       const sources = await desktopCapturer.getSources({
         types: ['screen', 'window'],

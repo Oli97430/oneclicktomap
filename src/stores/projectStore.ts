@@ -578,7 +578,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   // Calque capture de fenêtre / écran (desktopCapturer).
   addWindowLayer: (surfaceId, sourceId, name) =>
     set((s) => {
-      const layer = createLayer(name ?? 'Fenêtre', { kind: 'window', windowSourceId: sourceId });
+      const layer = createLayer(name ?? 'Fenêtre', {
+        kind: 'window',
+        windowSourceId: sourceId,
+        windowName: name,
+      });
       const next = mapSurface(s.project, surfaceId, (su) => ({
         ...su,
         layers: [...su.layers, layer],

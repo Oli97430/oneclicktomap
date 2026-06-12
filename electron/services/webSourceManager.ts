@@ -23,6 +23,21 @@ const MAX_DIM = 3840;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)));
 
 /**
+ * Empreinte rapide d'une frame (FNV-1a sur un sous-échantillon à pas premier).
+ * Sert à éviter de re-diffuser une image identique (contenu statique : viewer 3D
+ * figé, dashboard…) → économise la bande passante IPC et les téléversements GPU.
+ */
+function frameHash(buf: Buffer | Uint8Array): number {
+  let h = 2166136261;
+  for (let i = 0; i < buf.length; i += 997) {
+    h ^= buf[i];
+    h = Math.imul(h, 16777619);
+  }
+  h ^= buf.length; // capte aussi un changement de taille
+  return h >>> 0;
+}
+
+/**
  * Rend des pages web (fichiers HTML locaux ou URLs) hors-écran via des
  * `BrowserWindow` offscreen (OSR). Chaque page WebGL/2D est composée par
  * Chromium puis ses frames (`paint`) sont diffusées au renderer, qui les
@@ -73,17 +88,30 @@ export class WebSourceManager {
       this.deps.reportError(id, errorDescription || `Erreur ${errorCode}`);
     });
 
+    // État de déduplication, local à cette fenêtre (recréé à chaque start()).
+    let lastHash = 0;
+    let frameCount = 0;
+    const keepaliveEvery = Math.max(1, fps); // ~1 frame/s même si statique
+
     win.webContents.on('paint', (_event, _dirty, image: NativeImage) => {
       if (win.isDestroyed()) return;
       const size = image.getSize();
       if (size.width === 0 || size.height === 0) return;
+      const bitmap = image.getBitmap(); // Buffer BGRA, origine haut-gauche
+      frameCount += 1;
+      const hash = frameHash(bitmap);
+      // Saute les frames identiques (le ticker invalidate() force des repeintures
+      // même quand le contenu ne bouge pas). Keepalive périodique pour qu'une
+      // sortie ouverte tardivement reçoive quand même l'image fixe (sous ~1 s).
+      const keepalive = frameCount % keepaliveEvery === 0;
+      if (hash === lastHash && !keepalive) return;
+      lastHash = hash;
       this.deps.broadcast({
         id,
         width: size.width,
         height: size.height,
-        // getBitmap() renvoie un Buffer BGRA (origine haut-gauche). Copie défensive
-        // (le tampon interne peut être réutilisé après l'événement).
-        data: Uint8Array.from(image.getBitmap()),
+        // Copie défensive (le tampon interne peut être réutilisé après l'événement).
+        data: Uint8Array.from(bitmap),
       });
     });
 

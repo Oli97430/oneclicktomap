@@ -81,6 +81,7 @@ export function OutputView() {
         streamUrl: out?.streamUrl,
         webUrl: out?.webUrl,
         windowSourceId: out?.windowSourceId,
+        windowName: out?.windowName,
       });
     };
     const resync = () => stage.sync(toStageSurfaces(surfaces, assets), null, resolve);
